@@ -1,0 +1,5 @@
+/.snakemake/
+/msgf_plus/
+/test_data/
+/test_output/
+__pycache__/

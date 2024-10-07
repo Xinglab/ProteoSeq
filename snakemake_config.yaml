@@ -1,0 +1,73 @@
+# MS-GF+ configuration
+msgf_path: '/path/to/msgfplus/MSGFPlus.jar'
+# Input the mzML files of MS proteomics
+ms_datasets:
+  dataset_1_name:
+    mzml_dir: 'test_data/ms_dataset_1/mzML'
+    msgf_config: 'test_data/ms_dataset_1/msgf_config.txt'
+  dataset_2_name:
+    mzml_dir: 'test_data/ms_dataset_2/mzML'
+    msgf_config: 'test_data/ms_dataset_2/msgf_config.txt'
+# Input FASTA of protein sequences as reference
+protein_fasta: ''
+# Input the GTF file processed from RNA-seq
+# If no protein sequences input, the GTF file is used to translate protein sequences
+RNA_gtf: 'test_data/rna_seq.gtf'
+# Predict longest ORFs in transcripts to translate proteins
+# Set to false if CDS coordinates are involved in the GTF
+predict_ORF: true
+# Set to false to include translation products of transcripts annotated/predicted as NMD targets
+# NMD prediction rules: 1. > one exon; 2. CDS >= 150nt; 3. lastEJC - stop_codon >= 50nt
+discard_NMD: true
+# Merge the following canonical references to final protein database
+merge_UniProt_protein: true
+merge_GENCODE_protein: false
+customized_canonical_protein_path: '' 
+# Canonical protein reference files
+# By default, resulted PSMs are searched in UniProt and in GENCODE
+UniProt_protein_path: ''
+GENCODE_protein_path: ''
+# Genome reference and GENCODE annotation files, set path to empty will automatically download the GTF and FASTA to reference_dir
+#Default is empty. Set to /path/to/genome.fa to use your own genome.
+genome_fasta_path: ''
+#Default is empty. Set to /path/to/GENCODE.gtf to use your own annotation.
+GENCODE_gtf_path: ''
+genome_fasta_path: ''
+# Default references url
+# If the reference files above are not given, the following will be downloaded and parsed to reference_dir
+UniProt_protein_url: 'https://ftp.uniprot.org/pub/databases/uniprot/previous_major_releases/release-2021_04/knowledgebase/uniprot_sprot-only2021_04.tar.gz'
+GENCODE_protein_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_39/gencode.v39.pc_transcripts.fa.gz'
+genome_fasta_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_39/GRCh38.primary_assembly.genome.fa.gz'
+GENCODE_gtf_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_39/gencode.v39.annotation.gtf.gz'
+# Working directory
+reference_dir: 'test_output/protein_db'
+log_dir: 'test_output/log'
+work_dir: 'test_output/work_dir'
+results_dir: 'test_output/results'
+visualization_dir: 'test_output/visualization'
+# Percolator configuration
+train_fdr: 0.05
+test_fdr: 0.05
+qvalue_cutoff: 0.05
+# Resource allocation
+msgf_mem_gb: 48
+msgf_threads: 8
+msgf_time_hr: 12
+percolator_mem_gb: 16
+percolator_threads: 8
+percolator_time_hr: 12
+# Decoy database construction method, if both are on, will first reverse each sequence and then shuffle each sequence
+reverse: false
+shuffle: true
+# Visualize novel peptides, RNA_gtf must be provided
+enable_visualization: true
+visualization_mem_gb: 8
+visualization_time_hr: 12
+# Predict gene level expression by EM algorithm
+report_intensity: true
+predict_gene_by_intensity: true
+predict_gene_by_PSM_count: true
+em_mem_gb: 16
+em_time_hr: 12
+scripts_dir: 'scripts'
+conda_wrapper: conda_wrapper
