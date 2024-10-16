@@ -1,5 +1,4 @@
 import snakemake.utils
-import pandas as pd
 import os
 
 snakemake.utils.min_version('6.5.3')
@@ -24,7 +23,9 @@ if (not os.path.exists(config['RNA_gtf'])) and (not os.path.exists(config['prote
 if (not config['reverse']) and (not config['shuffle']):
     exit('Please select at least one method (reverse or shuffle) to construct the decoy database!')
 
-DATASETS = sorted(config['ms_datasets'])
+DATASETS = []
+if config['ms_datasets']:
+    DATASETS = sorted(config['ms_datasets'])
 MS_PATH_DICT = {}
 DATASET_CONFIG = {}
 DATASET_ALL_MS_RUNS = {}
@@ -606,12 +607,12 @@ rule collapse_protein_db:
     shell:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/collapse_protein_seqs.py'
         ' -i {input.pc_fasta} -o {output.fasta}'
-        ' -ot {output.index_table} --add_tags ORF_type:Novel\"'
+        ' -ot {output.index_table} --add_tags ORF_type:\"'
         ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/collapse_protein_seqs.py'
         ' -i {input.pc_fasta} -o {output.fasta}'
-        ' -ot {output.index_table} --add_tags ORF_type:Novel'
+        ' -ot {output.index_table} --add_tags ORF_type:'
         ' >> {log.out} 2>&1'
 
 
@@ -656,12 +657,12 @@ rule collapse_protein_db_with_canonical:
     shell:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/collapse_protein_seqs.py'
         ' -i {input.canonical_fasta} {input.pc_fasta}'
-        ' -o {output.fasta} -ot {output.index_table} --add_tags ORF_type:{params.input_tag_list},Novel\"'
+        ' -o {output.fasta} -ot {output.index_table} --add_tags ORF_type:{params.input_tag_list},\"'
         ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/collapse_protein_seqs.py'
         ' -i {input.canonical_fasta} {input.pc_fasta}'
-        ' -o {output.fasta} -ot {output.index_table} --add_tags ORF_type:{params.input_tag_list},Novel'
+        ' -o {output.fasta} -ot {output.index_table} --add_tags ORF_type:{params.input_tag_list},'
         ' >> {log.out} 2>&1'
 
 
@@ -919,6 +920,7 @@ rule build_sa:
         ' && '
         'echo \"Command: java -Xmx3500M -cp {params.cmd} edu.ucsd.msjava.msdbsearch.BuildSA -d {input.decoy_fasta} -tda 0\"'
         ' >> {log.out}'
+        ' && '
         'java -Xmx3500M -cp {params.cmd} edu.ucsd.msjava.msdbsearch.BuildSA -d {input.decoy_fasta} -tda 0'
         ' >> {log.out} 2>&1'
 

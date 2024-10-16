@@ -23,7 +23,7 @@ if __name__ == '__main__':
     annotation_gtf = args.annotation_gtf
     output_table = args.output_table
 
-    attribute_list = ['transcript_id', 'transcript_name', 'gene_id', 'gene_name']
+    attribute_list = ['ORF_type', 'transcript_id', 'transcript_name', 'gene_id', 'gene_name']
 
     tx_attributes_dict = {}
     for line in open(annotation_gtf, 'r'):

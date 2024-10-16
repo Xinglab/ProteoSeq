@@ -6,13 +6,9 @@ import matplotlib.pyplot as plt
 plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['svg.fonttype'] = 'none'
+plt.rcParams['font.family'] = 'Arial'
 from matplotlib import ticker
 from matplotlib.patches import Rectangle
-
-exon_height = .7
-exon_border = .5
-font_size = 10
-arrow_length = .3
 
 def parse_attributes(string):
     d = {}
@@ -131,28 +127,14 @@ def draw_all_exon(ax, y_pos, exon_coord_list, max_pos, strand, cds_coord_list=[]
     if plot_cds:
         cds_coord_list = sorted(cds_coord_list)
         for exon_coord in cds_coord_list:
-            draw_single_exon(ax, y_pos, exon_coord, max_pos, strand, color=exon_color, exon_height=exon_height*1.2)
+            draw_single_exon(ax, y_pos, exon_coord, max_pos, strand, color=exon_color, exon_height=exon_height*1.5)
 
 
-
-def plot_peptide_arrows(ax, y_pos, peptide_start, peptide_end, strand, text=None):
-    if strand == '+':
-        ax.annotate("", xy=(peptide_start, y_pos), xytext=(peptide_start, y_pos-arrow_length), arrowprops=dict(arrowstyle="->"))
-        ax.annotate("", xy=(peptide_end, y_pos), xytext=(peptide_end, y_pos-arrow_length), arrowprops=dict(arrowstyle="->"))
-        if text:
-            ax.text(peptide_start, y_pos, text, ha='left', va='top')
-    else:
-        ax.annotate("", xy=(-peptide_start, y_pos), xytext=(-peptide_start, y_pos-arrow_length), arrowprops=dict(arrowstyle="->"))
-        ax.annotate("", xy=(-peptide_end, y_pos), xytext=(-peptide_end, y_pos-arrow_length), arrowprops=dict(arrowstyle="->"))
-        if text:
-            ax.text(-peptide_end, y_pos, text, ha='left', va='top')
-
-
-def plot_structures(ax, tx_list, exon_coord_dict, tx_id_label_list=None, cds_coord_dict={}, plot_cds_in_tx=True, peptide_coord_dict={}):
+def plot_structures(ax, tx_list, exon_coord_dict, tx_id_label_list=None, cds_coord_dict={}, plot_cds_in_tx=True, peptide_coord_dict={}, exon_height=.6):
     num_trans = len(tx_list)
     peptide_list = sorted(peptide_coord_dict, key=lambda k:peptide_coord_dict[k])
     num_peptides = len(peptide_list)
-    ymin = -num_peptides + .5 #.5-arrow_length*num_peptide
+    ymin = -num_peptides + .5
     ymax = num_trans+.5
     ax.set_ylim(ymin, ymax)
     max_final_pos = 0
@@ -176,13 +158,13 @@ def plot_structures(ax, tx_list, exon_coord_dict, tx_id_label_list=None, cds_coo
         exon_coord_list = exon_coord_dict[tx_id]
         cds_coord_list = cds_coord_dict.get(tx_id, [])
         draw_intron(ax, y_pos, exon_coord_list, strand, 'k', 1, '-')
-        draw_all_exon(ax, y_pos, exon_coord_list, max_final_pos, strand, cds_coord_list=cds_coord_list, plot_cds=plot_cds_in_tx, exon_color=exon_color)
+        draw_all_exon(ax, y_pos, exon_coord_list, max_final_pos, strand, cds_coord_list=cds_coord_list, plot_cds=plot_cds_in_tx, exon_color=exon_color, exon_height=exon_height)
     for peptide_idx in range(num_peptides):
         y_pos = peptide_idx - num_peptides + 1
         peptide_seq = peptide_list[peptide_idx]
         peptide_coord_list = peptide_coord_dict[peptide_seq]
         draw_intron(ax, y_pos, peptide_coord_list, strand, '#008000', 2, '--')
-        draw_all_exon(ax, y_pos, peptide_coord_list, max_final_pos, strand, exon_color='#008000')
+        draw_all_exon(ax, y_pos, peptide_coord_list, max_final_pos, strand, exon_color='#008000', exon_height=exon_height)
     ax.set_xlim(xmin, xmax)
     for tx_idx in range(num_trans):
         y_pos = num_trans - tx_idx
@@ -238,6 +220,9 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--input_gtf', help='Input GTF file of peptide mappings. Required', type=str, required=True)
     parser.add_argument('-r', '--ref_gtf', help='Input GTF file of protein references. Required', type=str, required=True)
     parser.add_argument('-o', '--output_folder', help='Output folder to plot figures', type=str, required=True)
+    parser.add_argument('--exon_height', help='Exon height, default=.3', default=0.3, type=float)
+    parser.add_argument('--exon_border', help='Exon border, default=0', default=0, type=float)
+    parser.add_argument('--font_size', help='Font size, default=10', default=10, type=int)
     args = parser.parse_args()
 
     input_gtf = args.input_gtf
@@ -245,6 +230,10 @@ if __name__ == '__main__':
     output_folder = args.output_folder
     if not os.path.exists(output_folder):
         os.mkdir(output_folder)
+
+    exon_height = float(args.exon_height)
+    exon_border = float(args.exon_border)
+    font_size = float(args.font_size)
 
     gene_id_to_name_dict = {}
     detected_gene_id_to_tx_dict = {}
@@ -306,7 +295,7 @@ if __name__ == '__main__':
             if tx_id == '':
                 continue
             gene_id = detected_tx_to_gene_id_dict.get(tx_id, '')
-            if gene_id == '':
+            if gene_id == '' or gene_id == 'NA' or gene_id == 'None':
                 continue
             peptide_id = d['peptide_id'][0]
             peptide_seq = d['peptide_seq'][0]
@@ -332,10 +321,11 @@ if __name__ == '__main__':
         cds_dict = {tx_id:tx_orf_coord_dict.get(tx_id, set([])) for tx_id in tx_id_list}
         adjusted_cds_dict = adjust_pos_all_tx(cds_dict, tss_pos)
         adjusted_peptide_dict = adjust_pos_all_tx(peptide_seq_coord_dict, tss_pos)
-        fig, ax = plt.subplots(1, 1, figsize=(9, exon_height*len(tx_id_list)+arrow_length*len(peptide_seq_coord_dict)), sharey=True)
+        fig_height = 1 + .5*exon_height*len(tx_id_list)+len(peptide_seq_coord_dict)
+        fig, ax = plt.subplots(1, 1, figsize=(9, fig_height), sharey=True)
         plot_structures(ax, tx_id_list, adjusted_exon_dict, 
                 tx_id_label_list=tx_id_label_list, cds_coord_dict=adjusted_cds_dict, plot_cds_in_tx=True,
-                peptide_coord_dict=adjusted_peptide_dict)
+                peptide_coord_dict=adjusted_peptide_dict, exon_height=exon_height)
         fig.tight_layout()
         fig.savefig('%s/%s_structure.pdf'%(output_folder, gene_name))
         plt.close()
