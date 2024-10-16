@@ -67,7 +67,5 @@ visualization_time_hr: 12
 report_intensity: true
 predict_gene_by_intensity: true
 predict_gene_by_PSM_count: true
-em_mem_gb: 16
-em_time_hr: 12
 scripts_dir: 'scripts'
 conda_wrapper: conda_wrapper
