@@ -1,3 +1,30 @@
+"""
+ProteoSeq Snakefile
+This Snakemake workflow automates the construction and analysis of long-read RNA-seq based proteotranscriptomics pipelines, 
+including reference database preparation, MS/MS search, peptide filtering, and result visualization.
+Main Features:
+- Downloads and processes genome, GTF, and protein reference files (GENCODE, UniProt, custom).
+- Predicts ORFs and translates GTFs to protein FASTA, and annotates proteins.
+- Merges and collapses protein database, generates decoy database, and builds search indices.
+- Runs MS-GF+ and Percolator for peptide-spectrum matching and FDR estimation.
+- Filters significant PSMs, combines results across datasets, and annotates peptides.
+- Searches for novel peptides in reference and predicted databases.
+- Provides visualization of novel peptides and spectra.
+- Supports gene-level abundance estimation from PSMs and intensity data.
+Configuration:
+- All paths, parameters, and options are controlled via 'snakemake_config.yaml'.
+- Supports merging canonical proteins from UniProt, GENCODE, and custom sources.
+- Flexible decoy generation (reverse, shuffle).
+- Handles multiple datasets and MS runs.
+Usage:
+- Run with: `snakemake --cores <N>`
+- Requires Snakemake >= 6.5.3 and appropriate conda environments for scripts/tools.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import snakemake.utils
 import os
 
@@ -57,7 +84,9 @@ def all_input(wildcards):
         if config['RNA_gtf'] != '':
             inputs['novel_psms_mapping'] = os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode.rna_sample.gtf')
             if (config['enable_visualization']):
-                inputs['vis_dir']=os.path.join(config['visualization_dir'], 'plot_novel_peps.done')
+                inputs['vis_dir']=os.path.join(config['visualization_dir'], 'novel_peptides_structures', 'plot_novel_peps.done')
+    if (config['spectra_visualization']):
+        inputs['spectra_dir']=os.path.join(config['visualization_dir'], 'novel_peptides_spectra', 'plot_novel_peps_spectra.done')
     if config['predict_gene_by_PSM_count']:
         inputs['gene_abun']=os.path.join(config['results_dir'], 'all_gene_level_count.txt')
     if config['report_intensity']:
@@ -88,13 +117,13 @@ def get_genome_fasta(wildcards):
 def get_genome_gtf(wildcards):
     if (config['GENCODE_gtf_path']) and (config['GENCODE_gtf_path'] != ''):
         return config['GENCODE_gtf_path']
-    return os.path.join(config['reference_dir'], 'gencode.v39.annotation.gtf')
+    return os.path.join(config['reference_dir'], os.path.basename(config['GENCODE_gtf_url']).replace('.gz', ''))
 
 
 def get_gencode_protein(wildcards):
     if (config['GENCODE_protein_path']) and (config['GENCODE_protein_path'] != ''):
         return config['GENCODE_protein_path']
-    return os.path.join(config['reference_dir'], 'gencode.v39.pc_transcripts.fa')
+    return os.path.join(config['reference_dir'], os.path.basename(config['GENCODE_protein_url']).replace('.gz', ''))
 
 
 def get_uniprot_protein(wildcards):
@@ -121,7 +150,7 @@ rule download_genome_fasta:
 
 rule download_gencode_gtf:
     output:
-        gencode_gtf=os.path.join(config['reference_dir'], 'gencode.v39.annotation.gtf'),
+        gencode_gtf=os.path.join(config['reference_dir'], os.path.basename(config['GENCODE_gtf_url']).replace('.gz', '')),
     log:
         out=os.path.join(config['log_dir'], 'download_gencode_gtf.log'),
     params:
@@ -137,7 +166,7 @@ rule download_gencode_gtf:
 
 rule download_gencode_protein:
     output:
-        gencode_protein=os.path.join(config['reference_dir'], 'gencode.v39.pc_transcripts.fa'),
+        gencode_protein=os.path.join(config['reference_dir'], os.path.basename(config['GENCODE_protein_url']).replace('.gz', '')),
     log:
         out=os.path.join(config['log_dir'], 'download_gecode_protein.log'),
     params:
@@ -176,19 +205,19 @@ rule select_species_in_uniprot:
         uniprot_fasta=os.path.join(config['reference_dir'], 'uniprot_sprot.fasta'),
         uniprotvar_fasta=os.path.join(config['reference_dir'], 'uniprot_sprot_varsplic.fasta'),
     output:
-        combined_fasta=os.path.join(config['reference_dir'], 'uniprot_sprot_wVarsplic.fa'),
-        fasta=os.path.join(config['reference_dir'], 'uniprot_sprot_wVarsplic_human.fa'),
+        combined_fasta=os.path.join(config['temporary_dir'], 'protein_db', 'uniprot_sprot_wVarsplic.fa'),
+        fasta=os.path.join(config['temporary_dir'], 'protein_db', 'uniprot_sprot_wVarsplic_human.fa'),
     params:
         species='9606',
         scripts=config['scripts_dir'],
         conda_wrapper=config['conda_wrapper'],
     log:
-        out=os.path.join(config['log_dir'], 'download_uniprot_reference.log'),
+        out=os.path.join(config['log_dir'], 'select_species_in_uniprot.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
-        'echo \"Command: cat {input.uniprot_fasta} > {output.combined_fasta}\" >> {log.out}'
+        'echo \"Command: cat {input.uniprot_fasta} > {output.combined_fasta}\" > {log.out}'
         ' && '
         'echo \"Command: cat {input.uniprotvar_fasta} >> {output.combined_fasta}\" >> {log.out}'
         ' && '
@@ -206,21 +235,21 @@ rule select_species_in_uniprot:
 
 rule filter_ptc_in_uniprot:
     input:
-        fasta=os.path.join(config['reference_dir'], 'uniprot_sprot_wVarsplic_human.fa'),
+        fasta=os.path.join(config['temporary_dir'], 'protein_db', 'uniprot_sprot_wVarsplic_human.fa'),
     output:
         fasta=os.path.join(config['reference_dir'], 'uniprot_sprot_wVarsplic_human.PC.fa'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'download_uniprot_reference.log'),
+        out=os.path.join(config['log_dir'], 'filter_ptc_in_uniprot.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/filter_ptc.py'
         ' -i {input.fasta} -o {output.fasta}\"'
-        ' >> {log.out}'
+        ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/filter_ptc.py'
         ' -i {input.fasta} -o {output.fasta}'
@@ -232,12 +261,12 @@ rule annotate_gtf:
         sample_gtf=config['RNA_gtf'],
         genome_gtf=get_genome_gtf,
     output:
-        gtf=temp(os.path.join(config['reference_dir'], '1_annotated_wCDS.gtf')),
+        gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_annotated_wCDS.gtf'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'annotate_gtf.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
@@ -253,12 +282,12 @@ rule annotate_gtf:
 
 rule select_pc_transcripts:
     input:
-        gtf=os.path.join(config['reference_dir'], '1_annotated_wCDS.gtf'),
+        gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_annotated_wCDS.gtf'),
     output:
-        pc_gtf=temp(os.path.join(config['reference_dir'], '1_basic_pc.gtf')),
-        other_gtf=temp(os.path.join(config['reference_dir'], '1_non_basic_pc.gtf')),
+        pc_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_basic_pc.gtf'),
+        other_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_non_basic_pc.gtf'),
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'select_pc_transcripts.log'),
     params:
         tx_type='protein_coding',
         tx_tag='basic',
@@ -271,7 +300,7 @@ rule select_pc_transcripts:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/select_transcripts_in_gtf.py'
         ' -i {input.gtf} -o {output.pc_gtf} --output_discarded {output.other_gtf}'
         ' --tx_type {params.tx_type} --tx_tag {params.tx_tag}\"'
-        ' >> {log.out}'
+        ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/select_transcripts_in_gtf.py'
         ' -i {input.gtf} -o {output.pc_gtf} --output_discarded {output.other_gtf}'
@@ -281,12 +310,12 @@ rule select_pc_transcripts:
 
 rule select_nmd_transcripts:
     input:
-        gtf=os.path.join(config['reference_dir'], '1_non_basic_pc.gtf'),
+        gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_non_basic_pc.gtf'),
     output:
-        nmd_gtf=temp(os.path.join(config['reference_dir'], '1_nmd.gtf')),
-        other_gtf=temp(os.path.join(config['reference_dir'], '1_non_basic_pc_nmd.gtf')),
+        nmd_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_nmd.gtf'),
+        other_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_non_basic_pc_nmd.gtf'),
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'select_nmd_transcripts.log'),
     params:
         tx_type='nonsense_mediated_decay',
         tx_wCDS='True',
@@ -299,7 +328,7 @@ rule select_nmd_transcripts:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/select_transcripts_in_gtf.py'
         ' -i {input.gtf} -o {output.nmd_gtf}'
         ' --output_discarded {output.other_gtf} --tx_type {params.tx_type} --tx_wCDS {params.tx_wCDS}\"'
-        ' >> {log.out}'
+        ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/select_transcripts_in_gtf.py'
         ' -i {input.gtf} -o {output.nmd_gtf}'
@@ -310,21 +339,21 @@ rule select_nmd_transcripts:
 rule translate_basic_pc:
     input:
         genome_fasta=get_genome_fasta,
-        gtf=os.path.join(config['reference_dir'], '1_basic_pc.gtf'),
+        gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_basic_pc.gtf'),
     output:
         protein_fasta=os.path.join(config['reference_dir'], 'protein.basic_pc.fa'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'translate_basic_pc.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/translate_by_gtf.py -v 1'
         ' -g {input.genome_fasta} -i {input.gtf} -o {output.protein_fasta}\"'
-        ' >> {log.out}'
+        ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/translate_by_gtf.py -v 1'
         ' -g {input.genome_fasta} -i {input.gtf} -o {output.protein_fasta}'
@@ -334,10 +363,10 @@ rule translate_basic_pc:
 rule predict_orf:
     input:
         genome_fasta=get_genome_fasta,
-        gtf=os.path.join(config['reference_dir'], '1_non_basic_pc_nmd.gtf'),
+        gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_non_basic_pc_nmd.gtf'),
     output:
-        gtf=temp(os.path.join(config['reference_dir'], '1_predicted_orf.gtf')),
-        protein_fasta=os.path.join(config['reference_dir'], 'protein.predicted_orf.fa'),
+        gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_predicted_orf.gtf'),
+        protein_fasta=os.path.join(config['temporary_dir'], 'protein_db', 'protein.predicted_orf.fa'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -359,9 +388,9 @@ rule predict_orf:
 rule predict_nmd:
     input:
         genome_fasta=get_genome_fasta,
-        gtf=os.path.join(config['reference_dir'], '1_non_basic_pc_nmd.gtf'),
+        gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_non_basic_pc_nmd.gtf'),
     output:
-        gtf=temp(os.path.join(config['reference_dir'], '1_predicted_nmd.gtf')),
+        gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_predicted_nmd.gtf'),
         protein_fasta=os.path.join(config['reference_dir'], 'protein.predicted_nmd.fa'),
     params:
         conda_wrapper=config['conda_wrapper'],
@@ -385,21 +414,21 @@ rule predict_nmd:
 
 rule add_orf_tag_to_pc_gtf:
     input:
-        pc_gtf=os.path.join(config['reference_dir'], '1_basic_pc.gtf'),
+        pc_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_basic_pc.gtf'),
     output:
-        pc_gtf=temp(os.path.join(config['reference_dir'], '1_basic_pc.anno.gtf')),
+        pc_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_basic_pc.anno.gtf'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'add_orf_tag_to_pc_gtf.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
         ' -i {input.pc_gtf} -o {output.pc_gtf} --tag ORF:GENCODE\"'
-        ' >> {log.out}'
+        ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
         ' -i {input.pc_gtf} -o {output.pc_gtf} --tag ORF:GENCODE'
@@ -408,21 +437,21 @@ rule add_orf_tag_to_pc_gtf:
 
 rule add_orf_tag_to_novel_gtf:
     input:
-        novel_gtf=os.path.join(config['reference_dir'], '1_predicted_orf.gtf'),
+        novel_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_predicted_orf.gtf'),
     output:
-        novel_gtf=temp(os.path.join(config['reference_dir'], '1_predicted_orf.anno.gtf')),
+        novel_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_predicted_orf.anno.gtf'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'add_orf_tag_to_novel_gtf.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
         ' -i {input.novel_gtf} -o {output.novel_gtf} --tag ORF:novel\"'
-        ' >> {log.out}'
+        ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
         ' -i {input.novel_gtf} -o {output.novel_gtf} --tag ORF:novel'
@@ -431,17 +460,17 @@ rule add_orf_tag_to_novel_gtf:
 
 rule combine_pc_gtf:
     input:
-        annotated_gtf=os.path.join(config['reference_dir'], '1_basic_pc.anno.gtf'),
-        novel_gtf=os.path.join(config['reference_dir'], '1_predicted_orf.anno.gtf'),
+        annotated_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_basic_pc.anno.gtf'),
+        novel_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_predicted_orf.anno.gtf'),
     output:
-        gtf=temp(os.path.join(config['reference_dir'], 'protein_predicted.gtf.temp')),
+        gtf=os.path.join(config['temporary_dir'], 'protein_db', 'protein_predicted.gtf.tmp'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'combine_pc_gtf.log'),
     shell:
-        'echo \"Command: cat {input.annotated_gtf} > {output.gtf}\" >> {log.out}'
+        'echo \"Command: cat {input.annotated_gtf} > {output.gtf}\" > {log.out}'
         ' && '
         'echo \"Command: cat {input.novel_gtf} >> {output.gtf}\" >> {log.out}'
         ' && '
@@ -452,21 +481,21 @@ rule combine_pc_gtf:
 
 rule add_orf_tag_to_annotated_nmd_gtf:
     input:
-        novel_gtf=os.path.join(config['reference_dir'], '1_nmd.gtf'),
+        novel_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_nmd.gtf'),
     output:
-        novel_gtf=temp(os.path.join(config['reference_dir'], '1_nmd.anno.gtf')),
+        novel_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_nmd.anno.gtf'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'add_orf_tag_to_annotated_nmd_gtf.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
         ' -i {input.novel_gtf} -o {output.novel_gtf} --tag ORF:NMD\"'
-        ' >> {log.out}'
+        ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
         ' -i {input.novel_gtf} -o {output.novel_gtf} --tag ORF:NMD'
@@ -475,21 +504,21 @@ rule add_orf_tag_to_annotated_nmd_gtf:
 
 rule add_orf_tag_to_predicted_nmd_gtf:
     input:
-        novel_gtf=os.path.join(config['reference_dir'], '1_predicted_nmd.gtf'),
+        novel_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_predicted_nmd.gtf'),
     output:
-        novel_gtf=temp(os.path.join(config['reference_dir'], '1_predicted_nmd.anno.gtf')),
+        novel_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_predicted_nmd.anno.gtf'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'add_orf_tag_to_predicted_nmd_gtf.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
         ' -i {input.novel_gtf} -o {output.novel_gtf} --tag ORF:NMD\"'
-        ' >> {log.out}'
+        ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
         ' -i {input.novel_gtf} -o {output.novel_gtf} --tag ORF:NMD'
@@ -498,17 +527,17 @@ rule add_orf_tag_to_predicted_nmd_gtf:
 
 rule combine_nmd_gtf:
     input:
-        annotated_gtf=os.path.join(config['reference_dir'], '1_nmd.anno.gtf'),
-        novel_gtf=os.path.join(config['reference_dir'], '1_predicted_nmd.anno.gtf'),
+        annotated_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_nmd.anno.gtf'),
+        novel_gtf=os.path.join(config['temporary_dir'], 'protein_db', '1_predicted_nmd.anno.gtf'),
     output:
-        gtf=temp(os.path.join(config['reference_dir'], 'nmd_predicted.gtf.temp')),
+        gtf=os.path.join(config['temporary_dir'], 'protein_db', 'nmd_predicted.gtf.tmp'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'combine_nmd_gtf.log'),
     shell:
-        'echo \"Command: cat {input.annotated_gtf} > {output.gtf}\" >> {log.out}'
+        'echo \"Command: cat {input.annotated_gtf} > {output.gtf}\" > {log.out}'
         ' && '
         'echo \"Command: cat {input.novel_gtf} >> {output.gtf}\" >> {log.out}'
         ' && '
@@ -519,17 +548,17 @@ rule combine_nmd_gtf:
 
 rule combine_pc_nmd_gtf:
     input:
-        pc_gtf=os.path.join(config['reference_dir'], 'protein_predicted.gtf.temp'),
-        nmd_gtf=os.path.join(config['reference_dir'], 'nmd_predicted.gtf.temp'),
+        pc_gtf=os.path.join(config['temporary_dir'], 'protein_db', 'protein_predicted.gtf.tmp'),
+        nmd_gtf=os.path.join(config['temporary_dir'], 'protein_db', 'nmd_predicted.gtf.tmp'),
     output:
-        gtf=temp(os.path.join(config['reference_dir'], 'protein_predicted.wnmd.gtf.temp')),
+        gtf=os.path.join(config['temporary_dir'], 'protein_db', 'protein_predicted.wnmd.gtf.tmp'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'combine_pc_nmd_gtf.log'),
     shell:
-        'echo \"Command: cat {input.pc_gtf} > {output.gtf}\" >> {log.out}'
+        'echo \"Command: cat {input.pc_gtf} > {output.gtf}\" > {log.out}'
         ' && '
         'echo \"Command: cat {input.nmd_gtf} >> {output.gtf}\" >> {log.out}'
         ' && '
@@ -540,8 +569,8 @@ rule combine_pc_nmd_gtf:
 
 def select_final_predicted_gtf(wildcards):
     if (not config['discard_NMD']): #include NMD in protein db
-        return os.path.join(config['reference_dir'], 'protein_predicted.wnmd.gtf.temp')
-    return os.path.join(config['reference_dir'], 'protein_predicted.gtf.temp')
+        return os.path.join(config['temporary_dir'], 'protein_db', 'protein_predicted.wnmd.gtf.tmp')
+    return os.path.join(config['temporary_dir'], 'protein_db', 'protein_predicted.gtf.tmp')
 
 
 rule get_final_predicted_gtf:
@@ -550,12 +579,12 @@ rule get_final_predicted_gtf:
     output:
         final_db=os.path.join(config['reference_dir'], 'protein_predicted.gtf'),
     log:
-        out=os.path.join(config['log_dir'], 'predict_orf.log'),
+        out=os.path.join(config['log_dir'], 'get_final_predicted_gtf.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
-        'echo \"Command: cat {input.temp_db} > {output.final_db}\" >> {log.out}'
+        'echo \"Command: cat {input.temp_db} > {output.final_db}\" > {log.out}'
         ' && '
         'cat {input.temp_db} > {output.final_db}'
 
@@ -570,7 +599,7 @@ rule translate_pc:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'translate_protein.log'),
+        out=os.path.join(config['log_dir'], 'translate_pc.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
@@ -594,13 +623,13 @@ rule collapse_protein_db:
     input:
         pc_fasta=get_sample_protein,
     output:
-        fasta=temp(os.path.join(config['reference_dir'], 'protein_db.woCanonical.temp')),
-        index_table=temp(os.path.join(config['reference_dir'], 'protein_db.woCanonical.index.temp0')),
+        fasta=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.tmp'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp0'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'collapse_protein_seqs.log'),
+        out=os.path.join(config['log_dir'], 'collapse_protein_db.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
@@ -643,14 +672,14 @@ rule collapse_protein_db_with_canonical:
         pc_fasta=get_sample_protein,
         canonical_fasta=get_canonical_protein_fasta,
     output:
-        fasta=temp(os.path.join(config['reference_dir'], 'protein_db.wCanonical.temp')),
-        index_table=temp(os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp0')),
+        fasta=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.tmp'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp0'),
     params:
         input_tag_list=get_canonical_protein_tag,
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'collapse_protein_seqs.log'),
+        out=os.path.join(config['log_dir'], 'collapse_protein_db_with_canonical.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
@@ -668,12 +697,12 @@ rule collapse_protein_db_with_canonical:
 
 rule annotate_index_table_wocanonical_by_genome_gtf:
     input:
-        index_table=os.path.join(config['reference_dir'], 'protein_db.woCanonical.index.temp0'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp0'),
         gtf=get_genome_gtf,
     output:
-        index_table=temp(os.path.join(config['reference_dir'], 'protein_db.woCanonical.index.temp1')),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp1'),
     log:
-        out=os.path.join(config['log_dir'], 'annotate_protein_db.log'),
+        out=os.path.join(config['log_dir'], 'annotate_index_table_wocanonical_by_genome_gtf.log'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -683,7 +712,7 @@ rule annotate_index_table_wocanonical_by_genome_gtf:
     shell:
         'echo \"Command: python {params.scripts}/annotate_table_by_gtf.py'
         ' -i {input.index_table} -o {output.index_table} -g {input.gtf}\"'
-        ' >> {log.out}'
+        ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/annotate_table_by_gtf.py'
         ' -i {input.index_table} -o {output.index_table} -g {input.gtf}'
@@ -692,12 +721,12 @@ rule annotate_index_table_wocanonical_by_genome_gtf:
 
 rule annotate_index_table_wocanonical_by_rna_gtf:
     input:
-        index_table=os.path.join(config['reference_dir'], 'protein_db.woCanonical.index.temp1'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp1'),
         gtf=get_rna_gtf,
     output:
-        index_table=temp(os.path.join(config['reference_dir'], 'protein_db.woCanonical.index.temp2')),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp2'),
     log:
-        out=os.path.join(config['log_dir'], 'annotate_protein_db.log'),
+        out=os.path.join(config['log_dir'], 'annotate_index_table_wocanonical_by_rna_gtf.log'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -707,7 +736,7 @@ rule annotate_index_table_wocanonical_by_rna_gtf:
     shell:
         'echo \"Command: python {params.scripts}/annotate_table_by_gtf.py'
         ' -i {input.index_table} -o {output.index_table} -g {input.gtf}\"'
-        ' >> {log.out}'
+        ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/annotate_table_by_gtf.py'
         ' -i {input.index_table} -o {output.index_table} -g {input.gtf}'
@@ -716,12 +745,12 @@ rule annotate_index_table_wocanonical_by_rna_gtf:
 
 rule annotate_index_table_wcanonical_by_genome_gtf:
     input:
-        index_table=os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp0'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp0'),
         gtf=get_genome_gtf,
     output:
-        index_table=temp(os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp1')),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp1'),
     log:
-        out=os.path.join(config['log_dir'], 'annotate_protein_db.log'),
+        out=os.path.join(config['log_dir'], 'annotate_index_table_wcanonical_by_genome_gtf.log'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -740,12 +769,12 @@ rule annotate_index_table_wcanonical_by_genome_gtf:
 
 rule annotate_index_table_wcanonical_by_rna_gtf:
     input:
-        index_table=os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp1'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp1'),
         gtf=get_rna_gtf,
     output:
-        index_table=temp(os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp2')),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp2'),
     log:
-        out=os.path.join(config['log_dir'], 'annotate_protein_db.log'),
+        out=os.path.join(config['log_dir'], 'annotate_index_table_wcanonical_by_rna_gtf.log'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -764,12 +793,12 @@ rule annotate_index_table_wcanonical_by_rna_gtf:
 
 rule annotate_index_table_wcanonical_wo_rna_gtf_by_uniprot:
     input:
-        index_table=os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp1'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp1'),
         uniprot=get_uniprot_protein,
     output:
-        index_table=temp(os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp3')),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp3'),
     log:
-        out=os.path.join(config['log_dir'], 'annotate_protein_db.log'),
+        out=os.path.join(config['log_dir'], 'annotate_index_table_wcanonical_wo_rna_gtf_by_uniprot.log'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -788,12 +817,12 @@ rule annotate_index_table_wcanonical_wo_rna_gtf_by_uniprot:
 
 rule annotate_index_table_wcanonical_w_rna_gtf_by_uniprot:
     input:
-        index_table=os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp2'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp2'),
         uniprot=get_uniprot_protein,
     output:
-        index_table=temp(os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp4')),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp4'),
     log:
-        out=os.path.join(config['log_dir'], 'annotate_protein_db.log'),
+        out=os.path.join(config['log_dir'], 'annotate_index_table_wcanonical_w_rna_gtf_by_uniprot.log'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -813,8 +842,8 @@ rule annotate_index_table_wcanonical_w_rna_gtf_by_uniprot:
 def select_final_protein_db(wildcards):
     if (not config['merge_UniProt_protein']) and (not config['merge_GENCODE_protein']):
         if (not config['customized_canonical_protein_path']) or (config['customized_canonical_protein_path'] == ''):
-            return os.path.join(config['reference_dir'], 'protein_db.woCanonical.temp')
-    return os.path.join(config['reference_dir'], 'protein_db.wCanonical.temp')
+            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.tmp')
+    return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.tmp')
 
 
 rule get_final_db:
@@ -836,19 +865,19 @@ rule get_final_db:
 def select_final_index(wildcards):
     if (not config['merge_UniProt_protein']) and (not config['merge_GENCODE_protein']):
         if (config['protein_fasta']) and (config['protein_fasta'] != ''): #Ignore config['RNA_gtf'], only annotate with gencode_gtf
-            return os.path.join(config['reference_dir'], 'protein_db.woCanonical.index.temp1')
+            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp1')
         else: #Annotate with gencode_gtf, then rna_gtf
-            return os.path.join(config['reference_dir'], 'protein_db.woCanonical.index.temp2')
+            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp2')
     elif (not config['merge_UniProt_protein']):
         if (config['protein_fasta']) and (config['protein_fasta'] != ''): #Ignore config['RNA_gtf'], only annotate with gencode_gtf
-            return os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp1')
+            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp1')
         else: #Annotate with gencode_gtf, then rna_gtf
-            return os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp2')
+            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp2')
     else:
         if (config['protein_fasta']) and (config['protein_fasta'] != ''): #Ignore config['RNA_gtf'], only annotate with gencode_gtf, then uniprot
-            return os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp3')
+            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp3')
         else: #Annotate with gencode_gtf, then rna_gtf, then uniprot
-            return os.path.join(config['reference_dir'], 'protein_db.wCanonical.index.temp4')
+            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp4')
 
 
 rule get_final_index:
@@ -881,7 +910,7 @@ rule get_decoy:
         protein_fasta=os.path.join(config['reference_dir'], 'protein_db.fa'),
     output:
         decoy_fasta=os.path.join(config['reference_dir'], 'protein_db.mimic.fa'),
-    log: out=os.path.join(config['log_dir'], 'buildSA.log'),
+    log: out=os.path.join(config['log_dir'], 'get_decoy.log'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -929,6 +958,9 @@ rule create_work_dir:
     output:
         touch(os.path.join(config['work_dir'], 'mk_work_dir.done')),
 
+rule create_results_dir:
+    output:
+        touch(os.path.join(config['results_dir'], 'mk_results_dir.done')),
 
 rule run_msgf_target:
     input:
@@ -994,7 +1026,7 @@ rule run_percolator:
     input:
         pin=os.path.join(config['work_dir'], '{dataset}', '{ms_run}.pin'),
     output:
-        psms=temp(os.path.join(config['work_dir'], '{dataset}', '{ms_run}.temp')),
+        psms=os.path.join(config['temporary_dir'], 'work_dir', '{dataset}', '{ms_run}.tmp'),
     group: 'msgfpercolator'
     log:
         out=os.path.join(config['log_dir'], '{dataset}/{ms_run}_percolator.log'),
@@ -1022,9 +1054,9 @@ rule run_percolator:
         
 rule check_percolator_output:
     input:
-        psms=os.path.join(config['work_dir'], '{dataset}', '{ms_run}.temp'),
+        psms=os.path.join(config['temporary_dir'], 'work_dir', '{dataset}', '{ms_run}.tmp'),
     output:
-        psms=temp(os.path.join(config['work_dir'], '{dataset}', '{ms_run}.percolator_psms')),
+        psms=os.path.join(config['temporary_dir'], 'work_dir', '{dataset}', '{ms_run}.percolator_psms'),
     group: 'msgfpercolator'
     log:
         out=os.path.join(config['log_dir'], '{dataset}/{ms_run}_percolator_check.log'),
@@ -1047,7 +1079,7 @@ rule check_percolator_output:
 
 rule filter_significant_psms:
     input:
-        psms=os.path.join(config['work_dir'], '{dataset}', '{ms_run}.percolator_psms'),
+        psms=os.path.join(config['temporary_dir'], 'work_dir', '{dataset}', '{ms_run}.percolator_psms'),
         pin=os.path.join(config['work_dir'], '{dataset}', '{ms_run}.pin'),
     output:
         psms=os.path.join(config['work_dir'], '{dataset}', '{ms_run}.sig.psms'),
@@ -1150,7 +1182,7 @@ rule combine_all_psms:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
-        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/combine_psm_tables.py'
+        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/convert_expression_to_log2.py'
         ' -i {input.psms_list} -o {output.psms}\"'
         ' > {log.out}'
         ' && '
@@ -1163,7 +1195,7 @@ rule combine_all_intensity:
     input:
         psms_list=expand(os.path.join(config['results_dir'], '{dataset}.sig_psms_intensity.txt'), dataset=DATASETS),
     output:
-        psms=temp(os.path.join(config['results_dir'], 'all_sig_psms_intensity.txt')),
+        psms=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_intensity.txt'),
     log:
         out=os.path.join(config['log_dir'], 'combine_intensity.log'),
     params:
@@ -1188,10 +1220,10 @@ rule filter_novel_peptides:
         protein_fasta=os.path.join(config['reference_dir'], 'protein_db.fa'),
         index_table=os.path.join(config['reference_dir'], 'protein_db.index.txt'),
     output:
-        uniprot_peptide_table=temp(os.path.join(config['results_dir'], 'all_sig_psms_count.uniprot_tmp.txt')),
-        gencode_peptide_table=temp(os.path.join(config['results_dir'], 'all_sig_psms_count.gencode_tmp.txt')),
+        uniprot_peptide_table=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.uniprot_tmp.txt'),
+        gencode_peptide_table=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.gencode_tmp.txt'),
         other_canonical_peptide_table=os.path.join(config['results_dir'], 'all_sig_psms_count.other_canonical.txt'),
-        novel_peptide_table=temp(os.path.join(config['results_dir'], 'all_sig_psms_count.novel_tmp.txt')),
+        novel_peptide_table=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel_tmp.txt'),
     group: "filter_novel_peptides"
     params:
         conda_wrapper=config['conda_wrapper'],
@@ -1219,11 +1251,11 @@ rule filter_novel_peptides:
 
 rule search_novel_peptides_in_uniprot:
     input:
-        peptide_table=os.path.join(config['results_dir'], 'all_sig_psms_count.novel_tmp.txt'),
+        peptide_table=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel_tmp.txt'),
         uniprot_protein=get_uniprot_protein,
     output:
-        mapped=temp(os.path.join(config['results_dir'], 'all_sig_psms_count.novel.uniprot.txt')),
-        unmapped=temp(os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_uniprot.txt')),
+        mapped=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.uniprot.txt'),
+        unmapped=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_uniprot.txt'),
     group: "filter_novel_peptides"
     params:
         conda_wrapper=config['conda_wrapper'],
@@ -1251,11 +1283,11 @@ rule search_novel_peptides_in_uniprot:
 
 rule search_novel_peptides_in_gencode_pc:
     input:
-        peptide_table=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_uniprot.txt'),
+        peptide_table=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_uniprot.txt'),
         gencode_protein=get_gencode_protein,
     output:
-        mapped=temp(os.path.join(config['results_dir'], 'all_sig_psms_count.novel.gencode_pc_translation.txt')),
-        unmapped=temp(os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode_pc_translation.txt')),
+        mapped=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.gencode_pc_translation.txt'),
+        unmapped=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode_pc_translation.txt'),
     group: "filter_novel_peptides"
     params:
         conda_wrapper=config['conda_wrapper'],
@@ -1283,9 +1315,9 @@ rule search_novel_peptides_in_gencode_pc:
 
 rule get_fasta_novel_peptides:
     input:
-        peptide_table=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode_pc_translation.txt'),
+        peptide_table=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode_pc_translation.txt'),
     output:
-        fasta=temp(os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode_pc_translation.fa')),
+        fasta=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode_pc_translation.fa'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -1295,7 +1327,7 @@ rule get_fasta_novel_peptides:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
-        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/convert_tabular_to_fasta.py'
+        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/filter_chromosomes_in_gtf.py'
         ' -i {input.peptide_table} -o {output.fasta}\"'
         ' >> {log.out}'
         ' && '
@@ -1306,12 +1338,12 @@ rule get_fasta_novel_peptides:
 
 rule search_novel_peptides_in_gencode_gtf:
     input:
-        fasta=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode_pc_translation.fa'),
+        fasta=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode_pc_translation.fa'),
         gtf=get_genome_gtf,
         genome_fasta=get_genome_fasta,
     output:
-        mapped=temp(os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode_pc_translation.gencode_v39.gtf')),
-        unmapped=temp(os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode.fa')),
+        mapped=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode_pc_translation.gencode.gtf'),
+        unmapped=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode.fa'),
     group: "filter_novel_peptides"
     params:
         conda_wrapper=config['conda_wrapper'],
@@ -1335,7 +1367,7 @@ rule search_novel_peptides_in_gencode_gtf:
 
 rule search_non_gencode_novel_peptides:
     input:
-        fasta=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode.fa'),
+        fasta=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode.fa'),
         gtf=get_rna_gtf,
         genome_fasta=get_genome_fasta,
     output:
@@ -1360,9 +1392,9 @@ rule search_non_gencode_novel_peptides:
 
 rule get_fasta_gencode_pc_peptides:
     input:
-        peptide_table=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.gencode_pc_translation.txt'),
+        peptide_table=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.gencode_pc_translation.txt'),
     output:
-        fasta=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.gencode_pc_translation.fa'),
+        fasta=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.gencode_pc_translation.fa'),
     log:
         out=os.path.join(config['log_dir'], 'search_gencode_pc_peptides.log'),
     params:
@@ -1383,12 +1415,12 @@ rule get_fasta_gencode_pc_peptides:
 
 rule search_gencode_pc_peptides:
     input:
-        fasta=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.gencode_pc_translation.fa'),
+        fasta=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.gencode_pc_translation.fa'),
         gtf=get_genome_gtf,
         genome_fasta=get_genome_fasta,
     output:
-        mapped=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.gencode_pc_translation.gencode_v39.gtf'),
-        unmapped=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.gencode_pc_translation.no_v39_mapping.fa'),
+        mapped=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.gencode_pc_translation.gencode.gtf'),
+        unmapped=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.gencode_pc_translation.no_gencode_mapping.fa'),
     log:
         out=os.path.join(config['log_dir'], 'search_gencode_pc_peptides.log'),
     params:
@@ -1411,8 +1443,8 @@ rule search_gencode_pc_peptides:
 
 rule select_novel_not_gencode_mapped_peptides:
     input:
-        novel_all=os.path.join(config['results_dir'], 'all_sig_psms_count.novel_tmp.txt'),
-        novel_not_gencode=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode.fa'),
+        novel_all=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel_tmp.txt'),
+        novel_not_gencode=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode.fa'),
     output:
         novel_not_gencode=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.txt'),
     log:
@@ -1435,10 +1467,10 @@ rule select_novel_not_gencode_mapped_peptides:
 
 rule select_novel_gencode_mapped_peptides:
     input:
-        novel_all=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode_pc_translation.txt'),
-        novel_not_gencode=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode.fa'),
+        novel_all=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode_pc_translation.txt'),
+        novel_not_gencode=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode.fa'),
     output:
-        novel_gencode=temp(os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode_pc_translation.gencode_v39.txt')),
+        novel_gencode=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode_pc_translation.gencode.txt'),
     log:
         out=os.path.join(config['log_dir'], 'select_novel_gencode_mapped_peptides.log'),
     params:
@@ -1459,8 +1491,8 @@ rule select_novel_gencode_mapped_peptides:
 
 rule combine_uniprot_peptides:
     input:
-        uniprot=os.path.join(config['results_dir'], 'all_sig_psms_count.uniprot_tmp.txt'),
-        novel_uniprot=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.uniprot.txt'),
+        uniprot=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.uniprot_tmp.txt'),
+        novel_uniprot=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.uniprot.txt'),
     output:
         uniprot=os.path.join(config['results_dir'], 'all_sig_psms_count.uniprot.txt'),
     log:
@@ -1480,9 +1512,9 @@ rule combine_uniprot_peptides:
 
 rule combine_gencode_peptides:
     input:
-        gencode=os.path.join(config['results_dir'], 'all_sig_psms_count.gencode_tmp.txt'),
-        novel_gencode_pc=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.gencode_pc_translation.txt'),
-        novel_gencode_predict=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode_pc_translation.gencode_v39.txt'),
+        gencode=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.gencode_tmp.txt'),
+        novel_gencode_pc=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.gencode_pc_translation.txt'),
+        novel_gencode_predict=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_count.novel.not_gencode_pc_translation.gencode.txt'),
     output:
         gencode=os.path.join(config['results_dir'], 'all_sig_psms_count.gencode.txt'),
     log:
@@ -1509,8 +1541,8 @@ rule plot_novel_peptides:
         peptide_gtf=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.not_gencode.rna_sample.gtf'),
         ref_gtf=get_rna_gtf,
     output:
-        touch(os.path.join(config['visualization_dir'], 'plot_novel_peps.done')),
-        folder=directory(config['visualization_dir']),
+        touch(os.path.join(config['visualization_dir'], 'novel_peptides_structures', 'plot_novel_peps.done')),
+        folder=directory(os.path.join(config['visualization_dir'], 'novel_peptides_structures')),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -1529,6 +1561,34 @@ rule plot_novel_peptides:
         ' >> {log.out} 2>&1'
 
 
+rule plot_novel_peptides_spectra:
+    input:
+        peptide_table=os.path.join(config['results_dir'], 'all_sig_psms_count.novel.txt'),
+        results_dir_done=os.path.join(config['results_dir'], 'mk_results_dir.done'),
+        work_dir_done=os.path.join(config['work_dir'], 'mk_work_dir.done'),
+    output:
+        touch(os.path.join(config['visualization_dir'], 'novel_peptides_spectra', 'plot_novel_peps_spectra.done')),
+        folder=directory(os.path.join(config['visualization_dir'], 'novel_peptides_spectra')),
+    params:
+        conda_wrapper=config['conda_wrapper'],
+        scripts=config['scripts_dir'],
+        results_dir=config['results_dir'],
+        work_dir=config['work_dir'],
+    log:
+        out=os.path.join(config['log_dir'], 'plot_novel_peptides_spectra.log'),
+    resources:
+        mem_mb=DEFAULT_MEM_MB,
+        time_hours=DEFAULT_TIME_HOURS,
+    shell:
+        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/plot_peptides_spectra.py'
+        ' -i {input.peptide_table} -rd {params.results_dir} -wd {params.work_dir} -c snakemake_config.yaml -o {output.folder}\"'
+        ' > {log.out}'
+        ' && '
+        'bash {params.conda_wrapper} python {params.scripts}/plot_peptides_spectra.py'
+        ' -i {input.peptide_table} -rd {params.results_dir} -wd {params.work_dir} -c snakemake_config.yaml -o {output.folder}'
+        ' >> {log.out} 2>&1'
+
+
 rule predict_gene_abun_by_psm:
     input:
         psm=os.path.join(config['results_dir'], 'all_sig_psms_count.txt'),
@@ -1544,18 +1604,18 @@ rule predict_gene_abun_by_psm:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
-        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/get_gene_level_exp_by_EM.py'
+        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/predict_gene_level_exp_by_EM.py'
         ' -p {input.psm} -i {input.index} -o {output.gene_table}\"'
         ' > {log.out}'
         ' && '
-        'bash {params.conda_wrapper} python {params.scripts}/get_gene_level_exp_by_EM.py'
+        'bash {params.conda_wrapper} python {params.scripts}/predict_gene_level_exp_by_EM.py'
         ' -p {input.psm} -i {input.index} -o {output.gene_table}'
         ' >> {log.out} 2>&1'
 
 
 rule convert_psm_intensity_log2:
     input:
-        psm=os.path.join(config['results_dir'], 'all_sig_psms_intensity.txt'),
+        psm=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_intensity.txt'),
     output:
         psm=os.path.join(config['results_dir'], 'all_sig_psms_intensity.log2.txt'),
     params:
@@ -1578,38 +1638,38 @@ rule convert_psm_intensity_log2:
 
 rule predict_gene_abun_by_intensity:
     input:
-        psm=os.path.join(config['results_dir'], 'all_sig_psms_intensity.txt'),
+        psm=os.path.join(config['temporary_dir'], 'results', 'all_sig_psms_intensity.txt'),
         index=os.path.join(config['reference_dir'], 'protein_db.index.txt'),
     output:
-        gene_table=temp(os.path.join(config['results_dir'], 'all_gene_level_intensity.txt')),
+        gene_table=os.path.join(config['temporary_dir'], 'results', 'all_gene_level_intensity.txt'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'predict_gene_abun_by_psm.log'),
+        out=os.path.join(config['log_dir'], 'predict_gene_abun_by_intensity.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
-        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/get_gene_level_exp_by_EM.py'
+        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/predict_gene_level_exp_by_EM.py'
         ' -p {input.psm} -i {input.index} -o {output.gene_table}\"'
         ' > {log.out}'
         ' && '
-        'bash {params.conda_wrapper} python {params.scripts}/get_gene_level_exp_by_EM.py'
+        'bash {params.conda_wrapper} python {params.scripts}/predict_gene_level_exp_by_EM.py'
         ' -p {input.psm} -i {input.index} -o {output.gene_table}'
         ' >> {log.out} 2>&1'
 
 
 rule convert_gene_intensity_log2:
     input:
-        gene_table=os.path.join(config['results_dir'], 'all_gene_level_intensity.txt'),
+        gene_table=os.path.join(config['temporary_dir'], 'results', 'all_gene_level_intensity.txt'),
     output:
         gene_table=os.path.join(config['results_dir'], 'all_gene_level_intensity.log2.txt'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
     log:
-        out=os.path.join(config['log_dir'], 'predict_gene_abun_by_intensity.log'),
+        out=os.path.join(config['log_dir'], 'convert_gene_intensity_log2.log'),
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,

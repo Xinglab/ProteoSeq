@@ -1,3 +1,12 @@
+"""
+Script Name: filter_chromosomes_in_gtf.py
+Description: Select transcripts encoded in certain chromosomes in a given GTF.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 
 if __name__ == '__main__':

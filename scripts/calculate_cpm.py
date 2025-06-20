@@ -1,8 +1,17 @@
+"""
+Script Name: calculate_cpm.py
+Description: Calculate CPM from the raw read count table.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import sys, argparse
 from collections import defaultdict
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Calculate CPM from the raw read count table.')
     parser.add_argument('-i', '--input_file', help='Input file', type=str, required=True)
     parser.add_argument('-o', '--output_file', help='Output file', type=str, required=True)
     parser.add_argument('--skipped_columns', help='Skipped columns, comma splitted. default=1', default='1', type=str)

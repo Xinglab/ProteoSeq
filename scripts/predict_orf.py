@@ -1,3 +1,12 @@
+"""
+Script Name: predict_orf.py
+Description: Predict longest ORF in the transcripts and translate to protein sequences.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 import re
 from Bio.Seq import Seq

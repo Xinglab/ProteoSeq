@@ -1,3 +1,12 @@
+"""
+Script Name: select_transcripts_in_gtf.py
+Description: Select transcripts from given GTF with certain tags.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 
 def parse_attributes(string):

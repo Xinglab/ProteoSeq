@@ -1,3 +1,12 @@
+"""
+Script Name: filter_significant_psms.py
+Description: Select significant PSMs in Percolator output.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,argparse
 
 if __name__ == '__main__':

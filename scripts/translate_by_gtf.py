@@ -1,3 +1,12 @@
+"""
+Script Name: translate_by_gtf.py
+Description: Translate protein sequences with annotated CDS coordinates in a GTF.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 import re
 from Bio.Seq import Seq

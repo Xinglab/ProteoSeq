@@ -1,3 +1,12 @@
+"""
+Script Name: collapse_protein_seqs.py
+Description: Collapse identical sequence and reindex unique sequences.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 
 if __name__ == '__main__':
@@ -34,6 +43,8 @@ if __name__ == '__main__':
             file_tag_dict[input_file] = None
         protein_seq_dict = {}
         for line in open(input_file, 'r'):
+            if len(line.strip()) == 0:
+                continue
             if line[0] == '>':
                 seq_id = line.rstrip('\n')[1:]
                 if seq_id.startswith('ENST'): #Ensembl format transcript ID

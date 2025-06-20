@@ -1,3 +1,12 @@
+"""
+Script Name: filter_novel_peptides.py
+Description: Get novel peptides.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import re,os,argparse
 import numpy as np
     

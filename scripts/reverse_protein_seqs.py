@@ -1,3 +1,12 @@
+"""
+Script Name: reverse_protein_seqs.py
+Description: Reverse or/and shuffle protein sequences.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 import random
 

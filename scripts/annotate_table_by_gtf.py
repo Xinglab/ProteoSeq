@@ -1,3 +1,12 @@
+"""
+Script Name: annotate_table_by_gtf.py
+Description: Annotate index table with information from GTF.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 
 def parse_attributes(string):

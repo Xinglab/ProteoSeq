@@ -1,7 +1,16 @@
+"""
+Script Name: collapse_psms_in_all_samples.py
+Description: Collapse Percolator output PSMs to tabular table.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,argparse,re
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Collapse Percolator outputs to tabular table.')
+    parser = argparse.ArgumentParser(description='Collapse Percolator output PSMs to tabular table.')
     parser.add_argument('-i', '--input_file_list', help='List of input files with PSMs, space splitted. Required', nargs='+', type=str, required=True)
     parser.add_argument('-o', '--output_file', help='Output file', type=str)
     args = parser.parse_args()

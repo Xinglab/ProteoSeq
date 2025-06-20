@@ -21,6 +21,7 @@ Workflow of integrative proteotranscriptomic data analysis.
   - [5.3 Outputs on proteins level](#53-outputs-on-proteins-level)
   - [5.4 Visualization of novel peptides](#54-visualization-of-novel-peptides)
   - [5.5 Obtain mappings and visualization of given peptides](#55-obtain-mappings-and-visualization-of-given-peptides)
+  - [5.6 Visualization of raw MS2 spectra matched to novel peptides](#56-visualization-of-raw-ms2-spectra-matched-to-novel-peptides)
 
 
 ## 1. Dependencies
@@ -30,6 +31,9 @@ ProteoSeq requires the following to be installed and available on $PATH:
   - [SciPy](https://anaconda.org/cctbx202208/scipy) >= 1.9.0
   - [Biopython](https://anaconda.org/cctbx202112/biopython) >= 1.7.9
   - [Matplotlib](https://matplotlib.org/)
+  - [rpy2](https://rpy2.github.io/)
+  - [R/bioconductor](https://www.bioconductor.org/)
+  - [MSnbase](https://www.bioconductor.org/packages/devel/bioc/vignettes/MSnbase/inst/doc/v01-MSnbase-demo.html)
 - [Percolator](https://anaconda.org/bioconda/percolator) == 3.05.0
 - [MS-GF+](https://github.com/MSGFPlus/msgfplus)
 - [Java](https://www.java.com)
@@ -100,12 +104,13 @@ ProteoSeq can use a single GTF file processed from RNA-seq data as the input to 
 <br/>
 If CDS is not annotated for a transcript in the GTF file and if `predict_ORF` is on, ProteoSeq will look for the longest in-frame ORF in the transcript sequence and translate protein sequence. 
 <br/>
-ProteoSeq also predicts if a transcript is targeted to **NMD pathway** with three [rules](https://pubmed.ncbi.nlm.nih.gov/27618451/): 1. > one exon; 2. CDS >= 150nt; 3. lastEJC - stop_codon >= 50nt. By default, NMD transcripts are discarded. If `discard_NMD` is set to false, translation product of NMD transcripts will be included in the protein database.
+ProteoSeq also predicts if a transcript is targeted to **NMD pathway** with three [rules](https://pubmed.ncbi.nlm.nih.gov/27618451/): 1. > one exon; 2. CDS >= 150nt; 3. lastEJC - stop_codon >= 50nt. By default, NMD transcripts are discarded. If `discard_NMD` is set to `false`, translation product of NMD transcripts will be included in the protein database.
 ```
 RNA_gtf: '/path/to/rna_seq.gtf'
 predict_ORF: true
 discard_NMD: true
 ```
+The protein sequences translated from the input GTF file are stored in `protein_from_gtf.fa`, and the corresponding CDS coordinates are provided in `protein_predicted.gtf`. In `protein_from_gtf.fa`, lowercase letters indicate amino acids translated from codons that span exon-exon splice junctions.
 
 ### 4.3 Protein sequences for sample-specific database
 ProteoSeq can accept protein sequences to construct sample-specific protein database. The absolute path to the FASTA file needs to be set up in `snakemake_config.yaml`. An example file can be found in `test_data`.
@@ -114,15 +119,15 @@ protein_fasta: '/path/to/novel_protein.fasta'
 ```
 
 ### 4.4 Genome reference
-A FASTA file of genome sequences and a GTF file of GENCODE annotation is required for ProteoSeq. If the paths are not set up in the configuration file, ProteoSeq will automatically download `GRCh38.primary_assembly.genome.fa` and `gencode.v39.annotation.gtf`.
+A FASTA file of genome sequences and a GTF file of GENCODE annotation is required for ProteoSeq. If the paths are not set up in the configuration file, ProteoSeq will automatically download `GRCh38.primary_assembly.genome.fa` and `gencode.v46.annotation.gtf`.
 ```
 GENCODE_gtf_path: '/path/to/GENCODE.gtf' #Default if empty
 genome_fasta_path: '/path/to/genome.fa' #Default if empty
 ```
 Default downloads include:
 ```
-GENCODE_gtf_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_39/gencode.v39.annotation.gtf.gz'
-genome_fasta_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_39/GRCh38.primary_assembly.genome.fa.gz'
+GENCODE_gtf_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.annotation.gtf.gz'
+genome_fasta_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/GRCh38.primary_assembly.genome.fa.gz'
 ```
 
 ### 4.5 Canonical reference
@@ -130,7 +135,7 @@ An important feature of ProteoSeq is that for all identified peptides, ProteoSeq
 <br/>
 First, ProteoSeq will scan all peptides in UniProt sequences. If `UniProt_protein_path` is not set, ProteoSeq will automatically download the UniProt reviewed sequences plus isoforms from `UniProt_protein_url`. Human protein sequences (OX=9606) will be selected and sequences with ambiguous amino acid ("X") will be discarded. 
 <br/>
-By default, the UniProt protein sequences will be combined to proteins in sample-specific protein database for analyzing the MS data, unless `merge_UniProt_protein` is set to false.
+By default, the UniProt protein sequences will be combined to proteins in sample-specific protein database for analyzing the MS data, unless `merge_UniProt_protein` is set to `false`.
 ```
 merge_UniProt_protein: true
 UniProt_protein_path: ''
@@ -141,7 +146,7 @@ By default, the GENCODE proteins are not included in sample-specific protein dat
 ```
 merge_GENCODE_protein: false
 GENCODE_protein_path: ''
-GENCODE_protein_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_39/gencode.v39.pc_transcripts.fa.gz'
+GENCODE_protein_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.pc_transcripts.fa.gz'
 ```
 
 Users can specify their own canonical protein sequences. Peptides mapping to these provided canonical protein sequences will be reported as a separate file and will not be considered as novel peptides.
@@ -178,12 +183,12 @@ ProteoSeq by default runs an EM algorithm with spectral counts or total MS2 ion 
 - **all_gene_level_intensity.log2.txt**: Gene-level protein abundance in each MS sample, predicted from log2 transformed total MS2 ion intensities (set `predict_gene_by_intensity: true` to enable this prediction).
 
 ### 5.4 Visualization of novel peptides
-By default, ProteoSeq will plot the mappings of all novel peptides (defined as in **5.2**) to the transcripts provided in the 'RNA_gtf' file. For each of the genes with novel peptides, a PDF image will be output to `visualization_dir`. Set `enable_visualization:` to false in the configuration file to skip this step.
+By default, ProteoSeq will plot the mappings of all novel peptides (defined as in **5.2**) to the transcripts provided in the 'RNA_gtf' file. For each of the genes with novel peptides, a PDF image will be output to `visualization_dir`. Set `enable_visualization:` to `false` in the configuration file to skip this step.
 
 ### 5.5 Obtain mappings and visualization of given peptides
 Visualization can also be run manually with built-in python scripts for any given peptide sequences. It includes two steps: (1) given peptides are searched to obtain their mappings to a given list of transcripts. (2) the mappings are plotted to each gene.
 
-In the first step, given peptides need to be stored in a FASTA format file, each peptide needs to have an ID line starting with ">" and a sequence line. The searching space can either be the sample-specific `rna_seq.gtf` generated by ProteoSeq or the whole annotated transcriptome provided by GENCODE (e.g., `gencode.v39.annotation.gtf`. The GTF file must contain at least the coordinates of transcripts and exons. If the CDS coordinates are not found in the GTF file, ProteoSeq will automatically predict the longest ORF in the transcripts. A FASTA file with genome sequences is also required.
+In the first step, given peptides need to be stored in a FASTA format file, each peptide needs to have an ID line starting with ">" and a sequence line. The searching space can either be the sample-specific `rna_seq.gtf` generated by ProteoSeq or the whole annotated transcriptome provided by GENCODE (e.g., `gencode.v46.annotation.gtf`. The GTF file must contain at least the coordinates of transcripts and exons. If the CDS coordinates are not found in the GTF file, ProteoSeq will automatically predict the longest ORF in the transcripts. A FASTA file with genome sequences is also required.
 
 ```
 # python scripts/search_peptides.py -i peptides.fa -c ${GENCODE_GTF} -g ${GENOME_FA} -o peptides_in_gencode_tx.gtf 
@@ -196,3 +201,6 @@ In the second step, the mapping of a peptide to transcripts are plotted. For eac
 # python scripts/plot_peptides_to_tx.py -i peptides_in_gencode_tx.gtf -r ${GENCODE_GTF} -o visualization_dir
 python scripts/plot_peptides_to_tx.py -i peptides_in_sample_specific_tx.gtf -r rna_seq.gtf -o visualization_dir
 ```
+
+### 5.6 Visualization of raw MS2 spectra matched to novel peptides
+By default, ProteoSeq uses [MSnbase](https://www.bioconductor.org/packages/devel/bioc/vignettes/MSnbase/inst/doc/v01-MSnbase-demo.html) to visualize raw MS2 spectra matched to all novel peptides. For each raw MS2 spectrum, a PDF image is generated and saved in the `visualization_dir`. To enable this feature, [R/Bioconductor](https://www.bioconductor.org) and **MSnbase** must be installed in the conda environment (see **1. Dependencies** for installation instructions). To skip this step, set `spectra_visualization:` to `false` in the configuration file.

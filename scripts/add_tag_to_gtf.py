@@ -1,3 +1,12 @@
+"""
+Script Name: add_tag_to_gtf.py
+Description: Add new tags to all lines in a GTF file.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 
 def parse_attributes(string):

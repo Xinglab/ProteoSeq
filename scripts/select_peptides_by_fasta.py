@@ -1,3 +1,12 @@
+"""
+Script Name: select_peptides_by_fasta.py
+Description: Filter peptide table by peptide sequences in FASTA file.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import re,os,argparse
 import numpy as np
 

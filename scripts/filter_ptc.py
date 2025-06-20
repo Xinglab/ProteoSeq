@@ -1,3 +1,12 @@
+"""
+Script Name: filter_ptc.py
+Description: Filter out protein sequences with premature stop codon (\"*\") and instandard amino acids (e.g., \"X\" in the sequences).
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,re,sys,argparse
 from collections import defaultdict
 

@@ -1,3 +1,12 @@
+"""
+Script Name: predict_gene_level_exp_by_EM.py
+Description: Perform EM algorithm to calculate gene level peptide abundance.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,argparse,re
 import numpy as np
 from scipy import stats,sparse,io
@@ -95,7 +104,7 @@ def print_count(output_file, z_total):
     output_count.close()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Perform EM algorithm to get gene level peptide abundance.')
+    parser = argparse.ArgumentParser(description='Perform EM algorithm to calculate gene level peptide abundance.')
     parser.add_argument('-i', '--index_file', help='Index file for protein sequences. Required', type=str, required=True)
     parser.add_argument('-p', '--psm_file', help='Input table of PSM count. Required', type=str, required=True)
     parser.add_argument('-o', '--output_file', help='Output table of gene level expression. Required', type=str, required=True)

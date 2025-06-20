@@ -1,8 +1,17 @@
+"""
+Script Name: annotate_table_by_uniprot.py
+Description: Annotate index table with information from UniProt file.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 import re
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Annotate index table with information from GTF.')
+    parser = argparse.ArgumentParser(description='Annotate index table with information from UniProt file.')
     parser.add_argument('-i', '--input_table', help='Input table protein index to original ids. Required', type=str, required=True)
     parser.add_argument('-f', '--uniprot_fasta', help='Input FASTA of UniProt. The header must still contain GN for gene name annotation. Required', type=str, required=True)
     parser.add_argument('-o', '--output_table', help='Output table with annotation retrieved from GTF. Required', type=str, required=True)

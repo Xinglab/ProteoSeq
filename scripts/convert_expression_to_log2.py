@@ -1,3 +1,12 @@
+"""
+Script Name: convert_expression_to_log2.py
+Description: Convert expression to log2.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 import math
 

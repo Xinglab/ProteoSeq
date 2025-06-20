@@ -1,3 +1,12 @@
+"""
+Script Name: filter_significant_pin_by_psms.py
+Description: Filter significant PSMs in PIN file by output of Percolator.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,argparse,re
 import numpy as np
 

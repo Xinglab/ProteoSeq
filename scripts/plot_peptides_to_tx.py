@@ -1,3 +1,12 @@
+"""
+Script Name: plot_peptides_to_tx.py
+Description: Plot peptides to the transcripts structures
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,re,sys,argparse
 import numpy as np
 import matplotlib
@@ -130,7 +139,7 @@ def draw_all_exon(ax, y_pos, exon_coord_list, max_pos, strand, cds_coord_list=[]
             draw_single_exon(ax, y_pos, exon_coord, max_pos, strand, color=exon_color, exon_height=exon_height*1.5)
 
 
-def plot_structures(ax, tx_list, exon_coord_dict, tx_id_label_list=None, cds_coord_dict={}, plot_cds_in_tx=True, peptide_coord_dict={}, exon_height=.6):
+def plot_structures(ax, tx_list, exon_coord_dict, tx_id_label_list=None, cds_coord_dict={}, plot_cds_in_tx=True, peptide_coord_dict={}, exon_height=.6, intron_line_weight=1, peptide_junc_weight=2):
     num_trans = len(tx_list)
     peptide_list = sorted(peptide_coord_dict, key=lambda k:peptide_coord_dict[k])
     num_peptides = len(peptide_list)
@@ -145,7 +154,8 @@ def plot_structures(ax, tx_list, exon_coord_dict, tx_id_label_list=None, cds_coo
         max_pos = get_max_pos(exon_coord_list, pos_neg=strand) #adjusted, negative valaues for antisense
         max_final_pos = get_max_pos([(max_final_pos, max_pos)], pos_neg=strand)
     if strand == '-':
-        max_final_pos = - max_final_pos
+        max_final_pos = -max_final_pos
+        peptide_list = peptide_list[::-1]
     xmin, xmax = -max_final_pos*.01, max_final_pos*1.01
     for tx_idx in range(num_trans):
         y_pos = num_trans - tx_idx
@@ -157,13 +167,14 @@ def plot_structures(ax, tx_list, exon_coord_dict, tx_id_label_list=None, cds_coo
         strand = tx_strand_dict[tx_id]
         exon_coord_list = exon_coord_dict[tx_id]
         cds_coord_list = cds_coord_dict.get(tx_id, [])
-        draw_intron(ax, y_pos, exon_coord_list, strand, 'k', 1, '-')
+        draw_intron(ax, y_pos, exon_coord_list, strand, 'k', intron_line_weight, '-')
         draw_all_exon(ax, y_pos, exon_coord_list, max_final_pos, strand, cds_coord_list=cds_coord_list, plot_cds=plot_cds_in_tx, exon_color=exon_color, exon_height=exon_height)
     for peptide_idx in range(num_peptides):
-        y_pos = peptide_idx - num_peptides + 1
+        #y_pos = peptide_idx - num_peptides + 1
+        y_pos = - peptide_idx
         peptide_seq = peptide_list[peptide_idx]
         peptide_coord_list = peptide_coord_dict[peptide_seq]
-        draw_intron(ax, y_pos, peptide_coord_list, strand, '#008000', 2, '--')
+        draw_intron(ax, y_pos, peptide_coord_list, strand, '#008000', peptide_junc_weight, '--')
         draw_all_exon(ax, y_pos, peptide_coord_list, max_final_pos, strand, exon_color='#008000', exon_height=exon_height)
     ax.set_xlim(xmin, xmax)
     for tx_idx in range(num_trans):
@@ -181,6 +192,7 @@ def plot_structures(ax, tx_list, exon_coord_dict, tx_id_label_list=None, cds_coo
             #ax.text(-max_final_pos, y_pos+exon_height/2, tx_id_label, va='bottom', ha='left', fontsize=font_size+1)
             ax.text(xmin, y_pos, tx_id_label, va='center', ha='right', fontsize=font_size)
     for peptide_idx in range(num_peptides):
+        #y_pos = peptide_idx - num_peptides + 1
         y_pos = - peptide_idx
         peptide_seq = peptide_list[peptide_idx]
         if strand == '+':
@@ -210,18 +222,22 @@ def get_tx_id_label_short(tx_id):
         tx_id_label_list.append('ORF:GENCODE annotated')
     elif orf_type == 'novel':
         tx_id_label_list.append('ORF:predicted')
-    else:
-        tx_id_label_list.append('Not in protein db')
-    return '%s (%s)'%(tx_id, '; '.join(tx_id_label_list))
+    #else:
+    #    tx_id_label_list.append('Not in protein db')
+    if len(tx_id_label_list) >= 1:
+        return '%s (%s)'%(tx_id, '; '.join(tx_id_label_list))
+    return '%s'%(tx_id)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Plot peptides to the transcripts structures')
+    parser = argparse.ArgumentParser(description='Plot peptides to the transcripts structures.')
     parser.add_argument('-i', '--input_gtf', help='Input GTF file of peptide mappings. Required', type=str, required=True)
     parser.add_argument('-r', '--ref_gtf', help='Input GTF file of protein references. Required', type=str, required=True)
     parser.add_argument('-o', '--output_folder', help='Output folder to plot figures', type=str, required=True)
     parser.add_argument('--exon_height', help='Exon height, default=.3', default=0.3, type=float)
     parser.add_argument('--exon_border', help='Exon border, default=0', default=0, type=float)
+    parser.add_argument('--intron_line_weight', help='Intron line weight, default=.5', default=0.5, type=float)
+    parser.add_argument('--peptide_junc_weight', help='Peptide junction dashed line weight, default=1', default=1, type=float)
     parser.add_argument('--font_size', help='Font size, default=10', default=10, type=int)
     args = parser.parse_args()
 
@@ -233,6 +249,8 @@ if __name__ == '__main__':
 
     exon_height = float(args.exon_height)
     exon_border = float(args.exon_border)
+    intron_line_weight = float(args.intron_line_weight)
+    peptide_junc_weight = float(args.peptide_junc_weight)
     font_size = float(args.font_size)
 
     gene_id_to_name_dict = {}
@@ -273,7 +291,8 @@ if __name__ == '__main__':
             exon_coord = (int(arr[3]), int(arr[4]))
             tx_exon_coord_dict.setdefault(tx_id, []).append(exon_coord)
             orf_type = d.get('ORF', [''])[0]
-            tx_orf_type_dict[tx_id] = orf_type
+            if orf_type != '':
+                tx_orf_type_dict[tx_id] = orf_type
             if 'Ensembl_canonical' in d.get('tag', []):
                 tx_canonical_dict[tx_id] = 1
         elif arr[2] == 'CDS':
@@ -321,11 +340,12 @@ if __name__ == '__main__':
         cds_dict = {tx_id:tx_orf_coord_dict.get(tx_id, set([])) for tx_id in tx_id_list}
         adjusted_cds_dict = adjust_pos_all_tx(cds_dict, tss_pos)
         adjusted_peptide_dict = adjust_pos_all_tx(peptide_seq_coord_dict, tss_pos)
-        fig_height = 1 + .5*exon_height*len(tx_id_list)+len(peptide_seq_coord_dict)
+        fig_height = 1 + .5*exon_height*(len(tx_id_list)+len(peptide_seq_coord_dict))
         fig, ax = plt.subplots(1, 1, figsize=(9, fig_height), sharey=True)
         plot_structures(ax, tx_id_list, adjusted_exon_dict, 
                 tx_id_label_list=tx_id_label_list, cds_coord_dict=adjusted_cds_dict, plot_cds_in_tx=True,
-                peptide_coord_dict=adjusted_peptide_dict, exon_height=exon_height)
+                peptide_coord_dict=adjusted_peptide_dict, exon_height=exon_height,
+                intron_line_weight=intron_line_weight, peptide_junc_weight=peptide_junc_weight)
         fig.tight_layout()
         fig.savefig('%s/%s_structure.pdf'%(output_folder, gene_name))
         plt.close()

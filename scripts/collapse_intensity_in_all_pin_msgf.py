@@ -1,8 +1,17 @@
+"""
+Script Name: collapse_intensity_in_all_pin_msgf.py
+Description: Collapse Percolator output PSMs into a tabular table with summed MS2 intensities for each peptide.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,argparse,re
 import numpy as np
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Collapse PIN outputs to tabular table.')
+    parser = argparse.ArgumentParser(description='Collapse Percolator output PSMs into a tabular table with summed MS2 intensities for each peptide.')
     parser.add_argument('-i', '--input_pin_list', help='List of input PIN files with MS2 spectra intensity, space splitted. Required', nargs='+', type=str, required=True)
     parser.add_argument('-o', '--output_file', help='Output file', type=str)
     args = parser.parse_args()

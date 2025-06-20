@@ -1,3 +1,12 @@
+"""
+Script Name: filter_gtf_by_cpm.py
+Description: Filter transcripts with their expression in given samples.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,argparse
 import numpy as np
 
@@ -21,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('--sample', help='Add to indicate in which sample the expression should be used for filtering. Use comma to split samples if multiple samples are input. Default is all samples', type=str)
     parser.add_argument('--skipped_columns', help='Skipped columns. Comma splitted.', type=str)
     parser.add_argument('--cutoff', help='Expression cutoff, default=0', default=0, type=float)
-    parser.add_argument('--value', help='When multiple samples are given to --sample, set to choose how expression level in various samples should be calculated for filtering. default=min', type=str, default='min', choices=['max', 'min', 'avg', 'sum', 'median'])
+    parser.add_argument('--value', help='When multiple samples are given to --sample, set to choose how expression level in various samples should be calculated for filtering. default=max', type=str, default='max', choices=['max', 'min', 'avg', 'sum', 'median'])
     parser.add_argument('--include_equal', help='Add this flag to include equal to in addition to greater than, default=True', type=str, default='True', choices=['True', 'False'])
     args = parser.parse_args()
 
@@ -87,6 +96,7 @@ if __name__ == '__main__':
             if exp > cutoff:
                 tx_filtered_set.add(tx_id)
 
+    print('Input GTF: %d transcripts\nOutput GTF: %d transcripts'%(len(tx_exp_dict), len(tx_filtered_set)))
     output = open(output_gtf, 'w')
     for line in open(input_gtf, 'r'):
         if line.startswith('#'):

@@ -1,3 +1,12 @@
+"""
+Script Name: annotate_gtf.py
+Description: Annotate features and attributes to a GTF by those in another GTF.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 
 def parse_attributes(string):

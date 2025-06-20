@@ -6,3 +6,6 @@ Biopython>=1.79
 matplotlib
 percolator=3.05.0
 openjdk>=8
+r>=4.0.5
+rpy2
+bioconductor-msnbase

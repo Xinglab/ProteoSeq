@@ -1,3 +1,12 @@
+"""
+Script Name: convert_tabular_to_fasta.py
+Description: Convert tabular file to fasta file of sequences. Sequences will be reindexed from 1-N.
+Author: Lingyu Guan
+Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
+Email: guanl@chop.com
+Date: 2025-06-19
+"""
+
 import os,sys,argparse
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convert tabular file to fasta file of sequences. Sequences will be reindexed from 1-N.')
