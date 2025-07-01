@@ -36,7 +36,7 @@ genome_fasta_path: ''
 # Default references url
 # If the reference files above are not given, the following will be downloaded and parsed to reference_dir
 UniProt_protein_url: 'https://ftp.uniprot.org/pub/databases/uniprot/previous_major_releases/release-2021_04/knowledgebase/uniprot_sprot-only2021_04.tar.gz'
-GENCODE_protein_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.pc_transcripts.fa.gz'
+GENCODE_protein_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.pc_translations.fa.gz'
 genome_fasta_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/GRCh38.primary_assembly.genome.fa.gz'
 GENCODE_gtf_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.annotation.gtf.gz'
 # Working directory
