@@ -427,11 +427,11 @@ rule add_orf_tag_to_pc_gtf:
         time_hours=DEFAULT_TIME_HOURS,
     shell:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
-        ' -i {input.pc_gtf} -o {output.pc_gtf} --tag ORF:GENCODE\"'
+        ' -i {input.pc_gtf} -o {output.pc_gtf} --tag ORF_type:GENCODE\"'
         ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
-        ' -i {input.pc_gtf} -o {output.pc_gtf} --tag ORF:GENCODE'
+        ' -i {input.pc_gtf} -o {output.pc_gtf} --tag ORF_type:GENCODE'
         ' >> {log.out} 2>&1'
 
 
@@ -450,11 +450,11 @@ rule add_orf_tag_to_novel_gtf:
         time_hours=DEFAULT_TIME_HOURS,
     shell:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
-        ' -i {input.novel_gtf} -o {output.novel_gtf} --tag ORF:novel\"'
+        ' -i {input.novel_gtf} -o {output.novel_gtf} --tag ORF_type:Novel\"'
         ' > {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/add_tag_to_gtf.py'
-        ' -i {input.novel_gtf} -o {output.novel_gtf} --tag ORF:novel'
+        ' -i {input.novel_gtf} -o {output.novel_gtf} --tag ORF_type:Novel'
         ' >> {log.out} 2>&1'
 
 
@@ -619,31 +619,6 @@ def get_sample_protein(wildcards):
     return os.path.join(config['reference_dir'], 'protein_from_gtf.fa')
 
 
-rule collapse_protein_db:
-    input:
-        pc_fasta=get_sample_protein,
-    output:
-        fasta=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.tmp'),
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp0'),
-    params:
-        conda_wrapper=config['conda_wrapper'],
-        scripts=config['scripts_dir'],
-    log:
-        out=os.path.join(config['log_dir'], 'collapse_protein_db.log'),
-    resources:
-        mem_mb=DEFAULT_MEM_MB,
-        time_hours=DEFAULT_TIME_HOURS,
-    shell:
-        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/collapse_protein_seqs.py'
-        ' -i {input.pc_fasta} -o {output.fasta}'
-        ' -ot {output.index_table} --add_tags ORF_type:\"'
-        ' > {log.out}'
-        ' && '
-        'bash {params.conda_wrapper} python {params.scripts}/collapse_protein_seqs.py'
-        ' -i {input.pc_fasta} -o {output.fasta}'
-        ' -ot {output.index_table} --add_tags ORF_type:'
-        ' >> {log.out} 2>&1'
-
 
 def get_canonical_protein_fasta(wildcards):
     canonical_ref_list = []
@@ -672,8 +647,8 @@ rule collapse_protein_db_with_canonical:
         pc_fasta=get_sample_protein,
         canonical_fasta=get_canonical_protein_fasta,
     output:
-        fasta=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.tmp'),
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp0'),
+        fasta=os.path.join(config['reference_dir'], 'protein_db.fa'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.index.tmp0'),
     params:
         input_tag_list=get_canonical_protein_tag,
         conda_wrapper=config['conda_wrapper'],
@@ -695,14 +670,14 @@ rule collapse_protein_db_with_canonical:
         ' >> {log.out} 2>&1'
 
 
-rule annotate_index_table_wocanonical_by_genome_gtf:
+rule annotate_index_table_by_genome_gtf:
     input:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp0'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.index.tmp0'),
         gtf=get_genome_gtf,
     output:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp1'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.index.tmp1'),
     log:
-        out=os.path.join(config['log_dir'], 'annotate_index_table_wocanonical_by_genome_gtf.log'),
+        out=os.path.join(config['log_dir'], 'annotate_index_table_by_genome_gtf.log'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -719,14 +694,14 @@ rule annotate_index_table_wocanonical_by_genome_gtf:
         ' >> {log.out} 2>&1'
 
 
-rule annotate_index_table_wocanonical_by_rna_gtf:
+rule annotate_index_table_w_rna_by_rna_gtf:
     input:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp1'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.index.tmp1'),
         gtf=get_rna_gtf,
     output:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp2'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.index.tmp2'),
     log:
-        out=os.path.join(config['log_dir'], 'annotate_index_table_wocanonical_by_rna_gtf.log'),
+        out=os.path.join(config['log_dir'], 'annotate_index_table_w_rna_by_rna_gtf.log'),
     params:
         conda_wrapper=config['conda_wrapper'],
         scripts=config['scripts_dir'],
@@ -741,159 +716,62 @@ rule annotate_index_table_wocanonical_by_rna_gtf:
         'bash {params.conda_wrapper} python {params.scripts}/annotate_table_by_gtf.py'
         ' -i {input.index_table} -o {output.index_table} -g {input.gtf}'
         ' >> {log.out} 2>&1'
-
-
-rule annotate_index_table_wcanonical_by_genome_gtf:
-    input:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp0'),
-        gtf=get_genome_gtf,
-    output:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp1'),
-    log:
-        out=os.path.join(config['log_dir'], 'annotate_index_table_wcanonical_by_genome_gtf.log'),
-    params:
-        conda_wrapper=config['conda_wrapper'],
-        scripts=config['scripts_dir'],
-    resources:
-        mem_mb=DEFAULT_MEM_MB,
-        time_hours=DEFAULT_TIME_HOURS,
-    shell:
-        'echo \"Command: python {params.scripts}/annotate_table_by_gtf.py'
-        ' -i {input.index_table} -o {output.index_table} -g {input.gtf}\"'
-        ' >> {log.out}'
-        ' && '
-        'bash {params.conda_wrapper} python {params.scripts}/annotate_table_by_gtf.py'
-        ' -i {input.index_table} -o {output.index_table} -g {input.gtf}'
-        ' >> {log.out} 2>&1'
-        
-
-rule annotate_index_table_wcanonical_by_rna_gtf:
-    input:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp1'),
-        gtf=get_rna_gtf,
-    output:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp2'),
-    log:
-        out=os.path.join(config['log_dir'], 'annotate_index_table_wcanonical_by_rna_gtf.log'),
-    params:
-        conda_wrapper=config['conda_wrapper'],
-        scripts=config['scripts_dir'],
-    resources:
-        mem_mb=DEFAULT_MEM_MB,
-        time_hours=DEFAULT_TIME_HOURS,
-    shell:
-        'echo \"Command: python {params.scripts}/annotate_table_by_gtf.py'
-        ' -i {input.index_table} -o {output.index_table} -g {input.gtf}\"'
-        ' >> {log.out}'
-        ' && '
-        'bash {params.conda_wrapper} python {params.scripts}/annotate_table_by_gtf.py'
-        ' -i {input.index_table} -o {output.index_table} -g {input.gtf}'
-        ' >> {log.out} 2>&1'
-
-
-rule annotate_index_table_wcanonical_wo_rna_gtf_by_uniprot:
-    input:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp1'),
-        uniprot=get_uniprot_protein,
-    output:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp3'),
-    log:
-        out=os.path.join(config['log_dir'], 'annotate_index_table_wcanonical_wo_rna_gtf_by_uniprot.log'),
-    params:
-        conda_wrapper=config['conda_wrapper'],
-        scripts=config['scripts_dir'],
-    resources:
-        mem_mb=DEFAULT_MEM_MB,
-        time_hours=DEFAULT_TIME_HOURS,
-    shell:
-        'echo \"Command: python {params.scripts}/annotate_table_by_uniprot.py'
-        ' -i {input.index_table} -o {output.index_table} -f {input.uniprot}\"'
-        ' >> {log.out}'
-        ' && '
-        'bash {params.conda_wrapper} python {params.scripts}/annotate_table_by_uniprot.py'
-        ' -i {input.index_table} -o {output.index_table} -f {input.uniprot}'
-        ' >> {log.out} 2>&1'
-
-
-rule annotate_index_table_wcanonical_w_rna_gtf_by_uniprot:
-    input:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp2'),
-        uniprot=get_uniprot_protein,
-    output:
-        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp4'),
-    log:
-        out=os.path.join(config['log_dir'], 'annotate_index_table_wcanonical_w_rna_gtf_by_uniprot.log'),
-    params:
-        conda_wrapper=config['conda_wrapper'],
-        scripts=config['scripts_dir'],
-    resources:
-        mem_mb=DEFAULT_MEM_MB,
-        time_hours=DEFAULT_TIME_HOURS,
-    shell:
-        'echo \"Command: python {params.scripts}/annotate_table_by_uniprot.py'
-        ' -i {input.index_table} -o {output.index_table} -f {input.uniprot}\"'
-        ' >> {log.out}'
-        ' && '
-        'bash {params.conda_wrapper} python {params.scripts}/annotate_table_by_uniprot.py'
-        ' -i {input.index_table} -o {output.index_table} -f {input.uniprot}'
-        ' >> {log.out} 2>&1'
-
-
-def select_final_protein_db(wildcards):
-    if (not config['merge_UniProt_protein']) and (not config['merge_GENCODE_protein']):
-        if (not config['customized_canonical_protein_path']) or (config['customized_canonical_protein_path'] == ''):
-            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.tmp')
-    return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.tmp')
-
-
-rule get_final_db:
-    input:
-        temp_db=select_final_protein_db,
-    output:
-        final_db=os.path.join(config['reference_dir'], 'protein_db.fa'),
-    log:
-        out=os.path.join(config['log_dir'], 'get_final_protein_db.log'),
-    resources:
-        mem_mb=DEFAULT_MEM_MB,
-        time_hours=DEFAULT_TIME_HOURS,
-    shell:
-        'echo \"Command: cat {input.temp_db} > {output.final_db}\" >> {log.out}'
-        ' && '
-        'cat {input.temp_db} > {output.final_db}'
-
 
 def select_final_index(wildcards):
-    if (not config['merge_UniProt_protein']) and (not config['merge_GENCODE_protein']):
-        if (config['protein_fasta']) and (config['protein_fasta'] != ''): #Ignore config['RNA_gtf'], only annotate with gencode_gtf
-            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp1')
-        else: #Annotate with gencode_gtf, then rna_gtf
-            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.woCanonical.index.tmp2')
-    elif (not config['merge_UniProt_protein']):
-        if (config['protein_fasta']) and (config['protein_fasta'] != ''): #Ignore config['RNA_gtf'], only annotate with gencode_gtf
-            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp1')
-        else: #Annotate with gencode_gtf, then rna_gtf
-            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp2')
-    else:
-        if (config['protein_fasta']) and (config['protein_fasta'] != ''): #Ignore config['RNA_gtf'], only annotate with gencode_gtf, then uniprot
-            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp3')
-        else: #Annotate with gencode_gtf, then rna_gtf, then uniprot
-            return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.wCanonical.index.tmp4')
+    if (config['protein_fasta']) and (config['protein_fasta'] != ''): #Ignore config['RNA_gtf'], only annotate with gencode_gtf
+        return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.index.tmp1')
+    else: #Annotate with gencode_gtf, then rna_gtf
+        return os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.index.tmp2')
 
 
-rule get_final_index:
+rule annotate_index_table_by_uniprot:
     input:
-        temp_index=select_final_index,
+        index_table=select_final_index,
+        fasta=os.path.join(config['reference_dir'], 'protein_db.fa'),
+        uniprot=get_uniprot_protein,
     output:
-        final_index=os.path.join(config['reference_dir'], 'protein_db.index.txt'),
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.index.tmp3'),
     log:
-        out=os.path.join(config['log_dir'], 'get_final_index_db.log'),
+        out=os.path.join(config['log_dir'], 'annotate_index_table_by_uniprot.log'),
+    params:
+        conda_wrapper=config['conda_wrapper'],
+        scripts=config['scripts_dir'],
     resources:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
-        'echo \"Command: cp {input.temp_index} {output.final_index}\" > {log.out}'
+        'echo \"Command: python {params.scripts}/annotate_table_by_uniprot.py'
+        ' -i {input.index_table} -o {output.index_table} -f {input.fasta} -uf {input.uniprot}\"'
+        ' >> {log.out}'
         ' && '
-        'cp {input.temp_index} {output.final_index}'
+        'bash {params.conda_wrapper} python {params.scripts}/annotate_table_by_uniprot.py'
+        ' -i {input.index_table} -o {output.index_table} -f {input.fasta} -uf {input.uniprot}'
+        ' >> {log.out} 2>&1'
+
+
+rule annotate_index_table_by_gencode_pc:
+    input:
+        index_table=os.path.join(config['temporary_dir'], 'protein_db', 'protein_db.index.tmp3'),
+        fasta=os.path.join(config['reference_dir'], 'protein_db.fa'),
+        gencode_protein=get_gencode_protein,
+    output:
+        index_table=os.path.join(config['reference_dir'], 'protein_db.index.txt'),
+    log:
+        out=os.path.join(config['log_dir'], 'annotate_index_table_by_gencode_pc.log'),
+    params:
+        conda_wrapper=config['conda_wrapper'],
+        scripts=config['scripts_dir'],
+    resources:
+        mem_mb=DEFAULT_MEM_MB,
+        time_hours=DEFAULT_TIME_HOURS,
+    shell:
+        'echo \"Command: python {params.scripts}/annotate_table_by_gencode.py'
+        ' -i {input.index_table} -o {output.index_table} -f {input.fasta} -gf {input.gencode_protein}\"'
+        ' > {log.out}'
+        ' && '
+        'bash {params.conda_wrapper} python {params.scripts}/annotate_table_by_gencode.py'
+        ' -i {input.index_table} -o {output.index_table} -f {input.fasta} -gf {input.gencode_protein}'
+        ' >> {log.out} 2>&1'
 
 
 def get_decoy_method(wildcards):
@@ -1182,7 +1060,7 @@ rule combine_all_psms:
         mem_mb=DEFAULT_MEM_MB,
         time_hours=DEFAULT_TIME_HOURS,
     shell:
-        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/convert_expression_to_log2.py'
+        'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/combine_psm_tables.py'
         ' -i {input.psms_list} -o {output.psms}\"'
         ' > {log.out}'
         ' && '
@@ -1675,10 +1553,10 @@ rule convert_gene_intensity_log2:
         time_hours=DEFAULT_TIME_HOURS,
     shell:
         'echo \"Command: bash {params.conda_wrapper} python {params.scripts}/convert_expression_to_log2.py'
-        ' -i {input.gene_table} -o {output.gene_table} --columns 1\"'
+        ' -i {input.gene_table} -o {output.gene_table} --columns 1,2\"'
         ' >> {log.out}'
         ' && '
         'bash {params.conda_wrapper} python {params.scripts}/convert_expression_to_log2.py'
-        ' -i {input.gene_table} -o {output.gene_table} --columns 1'
+        ' -i {input.gene_table} -o {output.gene_table} --columns 1,2'
         ' >> {log.out} 2>&1'
 
