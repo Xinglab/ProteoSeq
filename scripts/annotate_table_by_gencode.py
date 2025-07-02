@@ -14,13 +14,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Annotate index table with information from UniProt file.')
     parser.add_argument('-i', '--input_table', help='Input table protein index to original ids. Required', type=str, required=True)
     parser.add_argument('-f', '--collapsed_fasta', help='Input FASTA of final collapsed protein db. Required', type=str, required=True)
-    parser.add_argument('-uf', '--uniprot_fasta', help='Input FASTA of UniProt. The header must still contain GN for gene name annotation. Required', type=str, required=True)
+    parser.add_argument('-gf', '--gencode_fasta', help='Input FASTA of GENCODE translations. The header must be | separated for gene id and name annotation. Required', type=str, required=True)
     parser.add_argument('-o', '--output_table', help='Output table with annotation retrieved from GTF. Required', type=str, required=True)
     args = parser.parse_args()
     
     input_table = args.input_table
     collapsed_fasta = args.collapsed_fasta
-    uniprot_fasta = args.uniprot_fasta
+    gencode_fasta = args.gencode_fasta
     output_table = args.output_table
 
     collapsed_protein_seq_dict = {}
@@ -30,33 +30,26 @@ if __name__ == '__main__':
         else:
             collapsed_protein_seq_dict[protein_idx] = collapsed_protein_seq_dict.get(protein_idx, '') + line.rstrip('\n')
 
-    uniprot_gene_name_dict = {}
-    uniprot_protein_seq_dict = {}
-    for line in open(uniprot_fasta, 'r'):
+    gene_tx_protein_seq_dict = {}
+    for line in open(gencode_fasta, 'r'):
         if line.startswith('>'):
             arr = line.rstrip('\n').split('|')
-            gene_name = re.findall('GN=(\S*)', arr[2])
-            if not gene_name:
-                uniprot_id_gene = (arr[1], '')
-                uniprot_gene_name_dict[arr[1]] = ''
-            else:
-                uniprot_id_gene = (arr[1],  gene_name[0])
-                uniprot_gene_name_dict[arr[1]] = gene_name[0]
+            gene_tx_id = (arr[2], arr[6], arr[1], arr[5])
         else:
-            uniprot_protein_seq_dict[uniprot_id_gene] = uniprot_protein_seq_dict.get(uniprot_id_gene, '') + line.rstrip('\n')
+            gene_tx_protein_seq_dict[gene_tx_id] = gene_tx_protein_seq_dict.get(gene_tx_id, '') + line.rstrip('\n')
 
     protein_seq_all_gene_tx_dict = {}
-    for uniprot_id_gene, protein_seq in uniprot_protein_seq_dict.items():
-        protein_seq_all_gene_tx_dict.setdefault(protein_seq, set()).add(uniprot_id_gene)
+    for gene_tx_id, protein_seq in gene_tx_protein_seq_dict.items():
+        protein_seq_all_gene_tx_dict.setdefault(protein_seq, set()).add(gene_tx_id)
 
     collapsed_protein_all_gene_tx_dict = {}
     for protein_idx, protein_seq in collapsed_protein_seq_dict.items():
-        uniprot_id_gene_set = protein_seq_all_gene_tx_dict.get(protein_seq, set())
-        if len(uniprot_id_gene_set) == 0:
+        gene_tx_set = protein_seq_all_gene_tx_dict.get(protein_seq, set())
+        if len(gene_tx_set) == 0:
             continue
-        collapsed_protein_all_gene_tx_dict[protein_idx] = uniprot_id_gene_set
+        collapsed_protein_all_gene_tx_dict[protein_idx] = gene_tx_set
 
-    annotated_uniprot_protein_dict = {}
+    annotated_protein_tx_dict = {}
     header_dict = {}
     for line in open(input_table, 'r'):
         if line.startswith('#'):
@@ -66,31 +59,29 @@ if __name__ == '__main__':
             continue
         arr = line.rstrip('\n').split('\t')
         protein_idx = arr[header_dict['protein_idx']]
-        seq_id = arr[header_dict['seq_id']]
-        if arr[header_dict['ORF_type']] == 'UniProt' and seq_id != '':
-            annotated_uniprot_protein_dict.setdefault(protein_idx, set()).add(seq_id)
+        transcript_id = arr[header_dict['transcript_id']]
+        if transcript_id != '':
+            annotated_protein_tx_dict.setdefault(protein_idx, set()).add(transcript_id)
 
     output = open(output_table, 'w')
-    checked_seq_id_set = set()
+    checked_protein_idx_set = set()
     for line in open(input_table, 'r'):
         if line.startswith('#'):
             output.write(line)
             continue
         arr = line.rstrip('\n').split('\t')
         protein_idx = arr[header_dict['protein_idx']]
-        seq_id = arr[header_dict['seq_id']]
-        if arr[header_dict['ORF_type']] == 'UniProt':
-            arr[header_dict['gene_name']] = uniprot_gene_name_dict.get(seq_id, '')
-        output.write('\t'.join(arr) + '\n')
-        if protein_idx in checked_seq_id_set:
+        if protein_idx in checked_protein_idx_set:
+            output.write(line)
             continue
-        checked_seq_id_set.add(protein_idx)
-        annotated_uniprot_protein_set = annotated_uniprot_protein_dict.get(protein_idx, set())
-        all_uniprot_id_gene_set = collapsed_protein_all_gene_tx_dict.get(protein_idx, set())
-        for uniprot_id_gene in all_uniprot_id_gene_set:
-            if uniprot_id_gene[0] in annotated_uniprot_protein_set:
+        checked_protein_idx_set.add(protein_idx)
+        annotated_tx_set = annotated_protein_tx_dict.get(protein_idx, set())
+        all_gene_tx_set = collapsed_protein_all_gene_tx_dict.get(protein_idx, set())
+        for gene_tx in all_gene_tx_set:
+            if gene_tx[2] in annotated_tx_set:
                 continue
-            output.write(f'{protein_idx}\t{uniprot_id_gene[0]}\tUniProt\t\t\t\t{uniprot_id_gene[1]}\n')
+            output.write(f'{protein_idx}\t{gene_tx[2]}\tGENCODE\t{gene_tx[2]}\t{gene_tx[3]}\t{gene_tx[0]}\t{gene_tx[1]}\n')
+        output.write(line)
 
     output.close()
 

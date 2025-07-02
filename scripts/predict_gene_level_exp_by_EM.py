@@ -11,6 +11,7 @@ import os,argparse,re
 import numpy as np
 from scipy import stats,sparse,io
 
+
 def multiply(a, b, block=10000):
     if (a.shape[1] != len(b)):
         print('Two arrays do not have matching shapes')
@@ -32,6 +33,7 @@ def multiply(a, b, block=10000):
     result = sparse.vstack(result_list)
     return result.tocsr()
 
+
 def dot(a, b, block=10000):
     if a.shape[1] != len(b):
         print('Two arrays do not have matching shapes')
@@ -49,6 +51,7 @@ def dot(a, b, block=10000):
     temp_row = a[i*block:nrow, :].dot(b)
     temp_array = np.append(temp_array, temp_row)
     return temp_array.reshape(nrow, 1)
+
 
 def divide(a, b, block=10000):
     if (a.shape[0] != b.shape[0]):
@@ -71,6 +74,7 @@ def divide(a, b, block=10000):
     result = sparse.vstack(result_list)
     return result.tocsr()
 
+
 def e_step(theta_t, block=10000):
     numerator = multiply(_Y, theta_t, block=block)
     denominator = dot(_Y, theta_t, block=block)
@@ -78,21 +82,25 @@ def e_step(theta_t, block=10000):
     del numerator,denominator
     return z_t1
 
+
 def m_step(z_t1):
     n_t1 = np.array(z_t1.sum(axis=0)).flatten()
     theta_t1 = n_t1/_N
     del n_t1
     return theta_t1
 
+
 def print_dist(output_file, dist, idx):
     output_dist = open(output_file, 'a')
     output_dist.write('%s\t%f\n'%(idx, np.log(dist)))
     output_dist.close()
 
+
 def print_theta(output_file, theta_t, idx):
     output_theta = open(output_file, 'a')
     output_theta.write('%d\t%s\n'%(idx, '\t'.join([str(_) for _ in theta_t])))
     output_theta.close()
+
 
 def print_count(output_file, z_total):
     output_count = open(output_file, 'w')
@@ -102,6 +110,7 @@ def print_count(output_file, z_total):
         gene_name = all_mapped_gene_list[_]
         output_count.write('%s\t%.2f\n'%(gene_name, gene_count))
     output_count.close()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Perform EM algorithm to calculate gene level peptide abundance.')
@@ -118,6 +127,7 @@ if __name__ == '__main__':
 
     epsilon = float(args.epsilon)
 
+    uniprot_gene_to_ensg_dict = {}
     protein_idx_all_gene_dict = {}
     header_dict = {}
     for line in open(index_file, 'r'):
@@ -128,13 +138,30 @@ if __name__ == '__main__':
             continue
         arr = line.rstrip('\n').split('\t')
         protein_idx = int(arr[header_dict['protein_idx']].replace('Protein_', ''))
-        tx_id = arr[header_dict['seq_id']]
-        if arr[header_dict['gene_name']] == '':
+        gene_id = arr[header_dict['gene_id']]
+        gene_name = arr[header_dict['gene_name']]
+        if gene_id in ['', 'NA']:
             continue
-        gene_name_list = arr[header_dict['gene_name']].split(',')
-        for gene_name in gene_name_list:
-            if (gene_name != '') and (gene_name != 'NA'):
-                protein_idx_all_gene_dict.setdefault(protein_idx, set()).add(gene_name)
+        protein_idx_all_gene_dict.setdefault(protein_idx, set()).add((gene_name, gene_id))
+        uniprot_gene_to_ensg_dict[gene_name] = gene_id
+
+    for line in open(index_file, 'r'):
+        if line.startswith('#'):
+            continue
+        arr = line.rstrip('\n').split('\t')
+        protein_idx = int(arr[header_dict['protein_idx']].replace('Protein_', ''))
+        if protein_idx_all_gene_dict.get(protein_idx, None):
+            continue
+        gene_id = arr[header_dict['gene_id']]
+        gene_name = arr[header_dict['gene_name']]
+        if gene_id in ['', 'NA'] and gene_name in ['', 'NA']:
+            print('Warning: Protein_%d has empty gene_id and gene_name, skipped'%(protein_idx))
+            continue
+        gene_id = uniprot_gene_to_ensg_dict.get(gene_name, '')
+        if gene_id == '':
+            protein_idx_all_gene_dict.setdefault(protein_idx, set()).add((gene_name, '%s:%s'%(arr[header_dict['ORF_type']], arr[header_dict['seq_id']].split('-')[0])))
+        else:
+            protein_idx_all_gene_dict.setdefault(protein_idx, set()).add((gene_name, gene_id))
 
     sample_list = []
     sample_peptide_count_dict = {}
@@ -179,8 +206,6 @@ if __name__ == '__main__':
         idx = 0
         for peptide_seq, mapped_gene_set in peptide_mapped_gene_dict_for_training.items():
             for gene_name in mapped_gene_set:
-                if (gene_name=='') or (gene_name=='NA'):
-                    continue
                 gene_idx = all_mapped_gene_idx_dict.get(gene_name, -1)
                 if gene_idx < 0:
                     all_mapped_gene_idx_dict[gene_name] = idx
@@ -195,6 +220,7 @@ if __name__ == '__main__':
             peptide_idx_dict[peptide_seq] = idx
             peptide_idx_count_dict[idx] = peptide_count_dict[peptide_seq]
             idx += 1
+
         peptide_mapped_gene_idx_dict = {}
         for peptide_seq, gene_set in peptide_mapped_gene_dict_for_training.items():
             gene_idx_set = set(all_mapped_gene_idx_dict[_] for _ in gene_set)
@@ -267,11 +293,11 @@ if __name__ == '__main__':
                 sample_gene_count_dict.setdefault(gene_name, {})[sample] = gene_count
     
     output_count = open(output_file, 'w')
-    output_count.write('#%s\t%s\n'%('gene_name', '\t'.join(sample_list)))
+    output_count.write('#%s\t%s\t%s\n'%('gene_name', 'gene_id', '\t'.join(sample_list)))
     for gene_name in sorted(sample_gene_count_dict):
         gene_count_dict = sample_gene_count_dict[gene_name]
         gene_count_list = [str(gene_count_dict.get(_,0)) for _ in sample_list]
-        output_count.write('%s\t%s\n'%(gene_name, '\t'.join(gene_count_list)))
+        output_count.write('%s\t%s\n'%('\t'.join(gene_name), '\t'.join(gene_count_list)))
     output_count.close()
 
 
