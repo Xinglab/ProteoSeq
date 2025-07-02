@@ -146,7 +146,7 @@ By default, the GENCODE proteins are not included in sample-specific protein dat
 ```
 merge_GENCODE_protein: false
 GENCODE_protein_path: ''
-GENCODE_protein_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.pc_transcripts.fa.gz'
+GENCODE_protein_url: 'https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46/gencode.v46.pc_translations.fa.gz'
 ```
 
 Users can specify their own canonical protein sequences. Peptides mapping to these provided canonical protein sequences will be reported as a separate file and will not be considered as novel peptides.
@@ -167,7 +167,12 @@ qvalue_cutoff: 0.05
 ```
 ## 5. Outputs and visualization
 ### 5.1 References
-Reference files are retained in the `reference_dir`. 
+Reference files are retained in the `reference_dir` for downstream analysis. To avoid redundancy in peptide searching and to keep the mapping between genes, transcripts, and proteins as clean as possible, identical protein sequences are collapsed and are reindexed from `Protein_1` to `Protein_N`. Collapsed protein sequences are stored in a standard FASTA file (`protein_db.fa`) as the protein reference database. Decoy database is denoted as `protein_db.mimic.fa`.
+
+A tabular table `protein_db.index.txt` includes the comprehensive metadata of the proteins in the reference database. It connects the indexes of the collapsed sequences to the original sequence IDs before collapsing identical sequences. If `RNA_gtf` is used to construct the reference database, the transcript ID, transcript name, gene ID and gene name, if included in the `RNA_gtf` file, will be annotated to the protein. For a protein sequence in the `protein_db.fa` identical to any UniProt sequence, a UniProt protein ID and UniProt annotated gene name will be annotated to the protein. For a protein sequence in the `protein_db.fa` identical to any GENCODE translated protein sequence (`gencode.v46.pc_translations.fa.gz`), a GENCODE transcript ID, transcript name, gene ID and gene name will be annotated to the protein. 
+
+Coordinates of ORFs (CDS coordinates) used for translation, and coordinates of transcripts and exons, are stored in a standard GTF file (`protein_predicted.gtf`). An additional tag indicating if the ORF is predicted as `Novel` or annotated in `GENCODE` is appended to the GTF file. Such human-readable annotation files will allow perfect concordance between DNA, RNA, proteins, and peptides to facilitate downstream analysis.
+
 
 ### 5.2 Outputs on peptides level
 A few files will be output to `results_dir`.
