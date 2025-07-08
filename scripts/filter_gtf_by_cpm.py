@@ -1,12 +1,3 @@
-"""
-Script Name: filter_gtf_by_cpm.py
-Description: Filter transcripts with their expression in given samples.
-Author: Lingyu Guan
-Affiliation: Children's Hospital of Philadelphia (CHOP), Xing Lab
-Email: guanl@chop.com
-Date: 2025-06-19
-"""
-
 import os,argparse
 import numpy as np
 
@@ -56,21 +47,30 @@ if __name__ == '__main__':
     else:
         include_equal = False
 
+    skipped_sample_set = set()
+    checked_sample_set = set()
     header_dict = {}
     tx_exp_dict = {}
     for line in open(exp_file, 'r'):
         arr = line.rstrip('\n').split('\t')
         if len(header_dict) == 0:
             for i in range(1, len(arr)):
-                if i not in skipped_columns:
-                    header_dict[arr[i]] = i
+                sample = arr[i]
+                if i in skipped_columns:
+                    continue
+                if (len(used_sample_list) > 0) and (sample not in used_sample_list):
+                    skipped_sample_set.add(sample)
+                    continue
+                header_dict[sample] = i
+                checked_sample_set.add(sample)
             continue
         tx_id = arr[0]
         for sample, i in header_dict.items():
             exp = float(arr[i])
-            if (len(used_sample_list) > 0) and (sample not in used_sample_list):
-                continue
             tx_exp_dict[tx_id][sample] = tx_exp_dict.setdefault(tx_id, {}).get(sample, 0) + exp
+
+    print('Skipped samples in the expression file: %s'%(','.join(sorted(skipped_sample_set))))
+    print('Samples not included in the expression file, skipped: %s'%(','.join(sorted(set(used_sample_list) - checked_sample_set))))
 
     tx_filtered_set = set()
     for tx_id, exp_d in tx_exp_dict.items():
